@@ -34,7 +34,7 @@ export function NavPages() {
   return (
     <div className="flex flex-col">
       <div className="px-2">
-        <h2 className="mb-2 px-2 text-lg font-semibold tracking-tight data-[state=collapsed]:hidden" data-state={sidebar.state}>Pages</h2>
+        <h2 className="mb-2 px-2 text-lg font-semibold tracking-tight data-[state=collapsed]:hidden" data-state={sidebar.state}>Portfolio-App</h2>
         <nav className="space-y-1">
           {pages.map((page) => {
             const Icon = page.icon
