@@ -72,17 +72,32 @@ export function LoginForm() {
     setIsLoading(true)
 
     try {
-      // Wrap in try-catch to prevent unhandled promise rejection
       const { data, error } = await supabase.auth.signInWithPassword({
         email: values.email,
         password: values.password,
       })
 
       if (error) {
-        toast.error('Invalid credentials', {
-          description: 'Please check your email and password.',
-          duration: 3000,
-        })
+        // Handle specific error cases
+        switch (error.message) {
+          case 'Invalid login credentials':
+            toast.error('Invalid credentials', {
+              description: 'Please check your email and password.',
+              duration: 3000,
+            })
+            break
+          case 'Email not confirmed':
+            toast.error('Email not verified', {
+              description: 'Please check your email for the verification link.',
+              duration: 5000,
+            })
+            break
+          default:
+            toast.error('Login Failed', {
+              description: 'An unexpected error occurred. Please try again.',
+              duration: 3000,
+            })
+        }
         return
       }
 
@@ -100,10 +115,11 @@ export function LoginForm() {
       })
       
       router.push('/dashboard')
-    } catch {
-      // Silently catch any errors and show user-friendly message
-      toast.error('Invalid credentials', {
-        description: 'Please check your email and password.',
+    } catch (error) {
+      // Handle unexpected errors
+      console.error('Login error:', error)
+      toast.error('Login Failed', {
+        description: 'An unexpected error occurred. Please try again later.',
         duration: 3000,
       })
     } finally {
