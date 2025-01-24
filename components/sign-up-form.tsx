@@ -64,35 +64,43 @@ export function SignUpForm() {
       setIsLoading(true)
 
       let avatarUrl = null
+      let uploadedFileName = null
 
       // Upload avatar if selected
       if (avatarFile) {
         const fileExt = avatarFile.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
+        // Create a more structured file path
+        uploadedFileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
         
         // Upload the avatar
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(fileName, avatarFile)
+          .upload(uploadedFileName, avatarFile, {
+            cacheControl: '3600',
+            upsert: false
+          })
 
         if (uploadError) {
-          toast.error("Avatar Upload Failed", {
-            description: "Failed to upload avatar. Please try again.",
-            duration: 5000,
-          })
+          if (uploadError.message.includes('duplicate')) {
+            toast.error("Upload Failed", {
+              description: "A file with this name already exists. Please try again.",
+              duration: 5000,
+            })
+          } else {
+            toast.error("Upload Failed", {
+              description: "Failed to upload avatar. Please try again.",
+              duration: 5000,
+            })
+          }
           throw uploadError
         }
 
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
           .from('avatars')
-          .getPublicUrl(fileName)
+          .getPublicUrl(uploadedFileName)
 
         avatarUrl = publicUrl
-        toast.success("Avatar Uploaded", {
-          description: "Your avatar was uploaded successfully!",
-          duration: 3000,
-        })
       }
 
       // Sign up with Supabase Auth
@@ -109,6 +117,20 @@ export function SignUpForm() {
       })
 
       if (authError) {
+        // If sign up fails, clean up the uploaded avatar
+        if (uploadedFileName) {
+          try {
+            await supabase.storage
+              .from('avatars')
+              .remove([uploadedFileName])
+              .catch(error => {
+                console.error('Failed to clean up avatar after failed sign-up:', error)
+              })
+          } catch (error) {
+            console.error('Error while cleaning up avatar:', error)
+          }
+        }
+
         if (authError.message.includes('email')) {
           toast.error("Email Already Registered", {
             description: "This email is already registered. Please use a different email or try logging in.",

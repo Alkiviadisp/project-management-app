@@ -1,5 +1,5 @@
 -- Enable necessary extensions
-create extension if not exists "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create custom types
 DO $$
@@ -15,14 +15,87 @@ END$$;
 
 -- Create tables
 create table if not exists profiles (
-    id uuid references auth.users on delete cascade not null primary key,
-    created_at timestamptz default now(),
-    updated_at timestamptz default now(),
+    id uuid references auth.users on delete cascade primary key,
     nickname text not null,
     avatar_url text,
-    subscription subscription_type default 'free'::subscription_type,
-    constraint proper_nickname check (char_length(nickname) >= 3)
+    subscription subscription_type default 'free' not null,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+    updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Set up Row Level Security (RLS)
+alter table profiles enable row level security;
+
+create policy "Public profiles are viewable by everyone"
+on profiles for select
+using (true);
+
+create policy "Users can insert their own profile"
+on profiles for insert
+with check (auth.uid() = id);
+
+create policy "Users can update their own profile"
+on profiles for update
+using (auth.uid() = id);
+
+-- Set up storage
+DO $$
+BEGIN
+    -- Ensure the avatars bucket exists and is public
+    INSERT INTO storage.buckets (id, name, public)
+    VALUES ('avatars', 'avatars', true)
+    ON CONFLICT (id) DO UPDATE SET public = true;
+
+    -- Drop existing storage policies if they exist
+    DROP POLICY IF EXISTS "Anyone can upload avatars" ON storage.objects;
+    DROP POLICY IF EXISTS "Anyone can view avatars" ON storage.objects;
+    DROP POLICY IF EXISTS "Authenticated users can upload avatars" ON storage.objects;
+    DROP POLICY IF EXISTS "Users can delete their own avatars" ON storage.objects;
+    DROP POLICY IF EXISTS "Users can update their own avatars" ON storage.objects;
+    DROP POLICY IF EXISTS "Give public access to avatars" ON storage.objects;
+    DROP POLICY IF EXISTS "Allow authenticated users to upload avatars" ON storage.objects;
+    DROP POLICY IF EXISTS "Allow users to update own avatar" ON storage.objects;
+    DROP POLICY IF EXISTS "Allow users to delete own avatar" ON storage.objects;
+    
+    -- Create new storage policies
+    
+    -- 1. Public read access for avatars
+    CREATE POLICY "Give public access to avatars"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'avatars');
+
+    -- 2. Allow anyone to upload avatars during sign-up
+    CREATE POLICY "Allow avatar uploads"
+    ON storage.objects FOR INSERT
+    WITH CHECK (bucket_id = 'avatars');
+
+    -- 3. Allow authenticated users to update their avatars
+    CREATE POLICY "Allow users to update avatars"
+    ON storage.objects FOR UPDATE
+    TO authenticated
+    USING (bucket_id = 'avatars');
+
+    -- 4. Allow authenticated users to delete their avatars
+    CREATE POLICY "Allow users to delete avatars"
+    ON storage.objects FOR DELETE
+    TO authenticated
+    USING (bucket_id = 'avatars');
+
+END $$;
+
+-- Handle updated_at using triggers
+create or replace function handle_updated_at()
+returns trigger as $$
+begin
+    new.updated_at = timezone('utc'::text, now());
+    return new;
+end;
+$$ language plpgsql;
+
+create trigger handle_profiles_updated_at
+    before update on profiles
+    for each row
+    execute function handle_updated_at();
 
 -- Create function to handle new user profiles
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -84,61 +157,7 @@ create table if not exists comments (
     constraint proper_content check (char_length(content) >= 1)
 );
 
--- Set up storage
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('avatars', 'avatars', true)
-ON CONFLICT (id) DO NOTHING;
-
--- Enable RLS on storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-
--- Storage policies
-DO $$
-BEGIN
-    -- Create policies if they don't exist
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'objects' 
-        AND policyname = 'Anyone can view avatars'
-    ) THEN
-        CREATE POLICY "Anyone can view avatars"
-        ON storage.objects FOR SELECT
-        USING (bucket_id = 'avatars');
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'objects' 
-        AND policyname = 'Anyone can upload avatars'
-    ) THEN
-        CREATE POLICY "Anyone can upload avatars"
-        ON storage.objects FOR INSERT
-        WITH CHECK (bucket_id = 'avatars');
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'objects' 
-        AND policyname = 'Users can update their own avatars'
-    ) THEN
-        CREATE POLICY "Users can update their own avatars"
-        ON storage.objects FOR UPDATE
-        USING (bucket_id = 'avatars' AND auth.uid()::text = owner);
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'objects' 
-        AND policyname = 'Users can delete their own avatars'
-    ) THEN
-        CREATE POLICY "Users can delete their own avatars"
-        ON storage.objects FOR DELETE
-        USING (bucket_id = 'avatars' AND auth.uid()::text = owner);
-    END IF;
-END$$;
-
 -- Enable Row Level Security
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_members ENABLE ROW LEVEL SECURITY;
@@ -147,46 +166,6 @@ ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 -- Set up RLS policies
 DO $$
 BEGIN
-    -- Profiles policies
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'profiles' 
-        AND policyname = 'Public profiles are viewable by everyone'
-    ) THEN
-        CREATE POLICY "Public profiles are viewable by everyone"
-        ON profiles FOR SELECT
-        USING (true);
-    END IF;
-
-    -- Allow profile creation during sign-up
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'profiles' 
-        AND policyname = 'Users can insert their own profile'
-    ) THEN
-        CREATE POLICY "Users can insert their own profile"
-        ON profiles FOR INSERT
-        WITH CHECK (
-            -- Allow insert if the ID exists in auth.users
-            EXISTS (
-                SELECT 1
-                FROM auth.users
-                WHERE id = profiles.id
-            )
-        );
-    END IF;
-
-    -- Allow users to update their own profile
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'profiles' 
-        AND policyname = 'Users can update own profile'
-    ) THEN
-        CREATE POLICY "Users can update own profile"
-        ON profiles FOR UPDATE
-        USING (auth.uid() = id);
-    END IF;
-
     -- Projects policies
     IF NOT EXISTS (
         SELECT 1 FROM pg_policies 

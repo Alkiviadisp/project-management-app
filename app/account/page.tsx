@@ -126,17 +126,58 @@ export default function AccountPage() {
       if (avatarFile) {
         hasChanges = true
         const fileExt = avatarFile.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
-        
+        if (!user) {
+          throw new Error("User not found")
+        }
+
+        // Delete old avatar if it exists
+        if (user?.avatar_url) {
+          try {
+            // Extract just the filename from the URL
+            const filename = user.avatar_url.split('/').pop()?.split('?')[0]
+            if (filename) {
+              console.log('Attempting to delete:', filename)
+              
+              const { error: deleteError } = await supabase.storage
+                .from('avatars')
+                .remove([filename])
+
+              if (deleteError) {
+                console.error('Failed to delete old avatar:', deleteError)
+                toast.error("Failed to delete old avatar", {
+                  description: "Your new avatar will still be uploaded.",
+                  duration: 3000,
+                })
+              } else {
+                console.log('Successfully deleted old avatar')
+              }
+            }
+          } catch (error) {
+            console.error('Error while trying to delete old avatar:', error)
+          }
+        }
+
+        // Upload new avatar
+        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(fileName, avatarFile)
+          .upload(fileName, avatarFile, {
+            cacheControl: '3600',
+            upsert: false
+          })
 
         if (uploadError) {
-          toast.error("Avatar Upload Failed", {
-            description: "Failed to upload avatar. Please try again.",
-            duration: 5000,
-          })
+          if (uploadError.message.includes('duplicate')) {
+            toast.error("Upload Failed", {
+              description: "A file with this name already exists. Please try again.",
+              duration: 5000,
+            })
+          } else {
+            toast.error("Upload Failed", {
+              description: "Failed to upload avatar. Please try again.",
+              duration: 5000,
+            })
+          }
           throw uploadError
         }
 
