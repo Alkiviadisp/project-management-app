@@ -1,4 +1,4 @@
-import { LayoutDashboard, CreditCard, Car } from "lucide-react"
+import { LayoutDashboard, FolderKanban, ListTodo, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -11,19 +11,24 @@ import {
 
 const pages = [
   {
-    title: "Main",
-    url: "/main",
+    title: "Dashboard",
+    url: "/dashboard",
     icon: LayoutDashboard,
   },
   {
-    title: "Card",
-    url: "/card",
-    icon: CreditCard,
+    title: "Projects",
+    url: "/projects",
+    icon: FolderKanban,
   },
   {
-    title: "Car",
-    url: "/car",
-    icon: Car,
+    title: "Tasks",
+    url: "/tasks",
+    icon: ListTodo,
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings,
   },
 ]
 
