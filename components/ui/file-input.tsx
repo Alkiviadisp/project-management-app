@@ -4,7 +4,7 @@ import * as React from "react"
 import { UploadCloud } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-interface FileInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface FileInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
   onFileSelect: (file: File) => void
   previewUrl?: string
 }
@@ -12,6 +12,11 @@ interface FileInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 export function FileInput({ className, onFileSelect, previewUrl, ...props }: FileInputProps) {
   const [preview, setPreview] = React.useState<string | undefined>(previewUrl)
   const inputRef = React.useRef<HTMLInputElement>(null)
+
+  // Update preview when previewUrl changes
+  React.useEffect(() => {
+    setPreview(previewUrl)
+  }, [previewUrl])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -26,6 +31,10 @@ export function FileInput({ className, onFileSelect, previewUrl, ...props }: Fil
       } else {
         alert('Please select an image file')
       }
+    }
+    // Reset the input value so the same file can be selected again
+    if (inputRef.current) {
+      inputRef.current.value = ''
     }
   }
 

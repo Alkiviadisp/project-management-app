@@ -30,6 +30,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
+import { createClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 export function NavUser({
   user,
@@ -38,9 +42,31 @@ export function NavUser({
     name: string
     email: string
     avatar: string
+    subscription?: 'free' | 'pro' | 'admin'
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const supabase = createClient()
+
+  const subscriptionBadgeColor = {
+    free: "bg-muted text-muted-foreground",
+    pro: "bg-blue-500/10 text-blue-500",
+    admin: "bg-purple-500/10 text-purple-500",
+  }[user.subscription || 'free']
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      
+      toast.success("Logged out successfully")
+      router.push("/login")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to log out")
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -56,7 +82,12 @@ export function NavUser({
                 <AvatarFallback className="rounded-lg">CN</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{user.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-semibold">{user.name}</span>
+                  <Badge variant="outline" className={`${subscriptionBadgeColor} text-[10px] px-1 py-0`}>
+                    {user.subscription || 'free'}
+                  </Badge>
+                </div>
                 <span className="truncate text-xs">{user.email}</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
@@ -75,7 +106,12 @@ export function NavUser({
                   <AvatarFallback className="rounded-lg">CN</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">{user.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-semibold">{user.name}</span>
+                    <Badge variant="outline" className={`${subscriptionBadgeColor} text-[10px] px-1 py-0`}>
+                      {user.subscription || 'free'}
+                    </Badge>
+                  </div>
                   <span className="truncate text-xs">{user.email}</span>
                 </div>
               </div>
@@ -105,8 +141,8 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOut />
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="mr-2" />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

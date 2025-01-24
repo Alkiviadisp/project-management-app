@@ -37,6 +37,29 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = React.useState(false)
   const supabase = createClient()
 
+  // Add error event listener to window to prevent unhandled errors
+  React.useEffect(() => {
+    const handler = (event: ErrorEvent) => {
+      if (event.message.includes('fetch failed') || 
+          (event.error?.stack && event.error.stack.includes('supabase.co/auth/v1/token'))) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener('error', handler);
+    window.addEventListener('unhandledrejection', (event) => {
+      if (event.reason?.stack?.includes('supabase.co/auth/v1/token')) {
+        event.preventDefault();
+      }
+    });
+
+    return () => {
+      window.removeEventListener('error', handler);
+      window.removeEventListener('unhandledrejection', handler as any);
+    };
+  }, []);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -46,17 +69,43 @@ export function LoginForm() {
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true)
+
     try {
-      setIsLoading(true)
-      const { error } = await supabase.auth.signInWithPassword(values)
+      // Wrap in try-catch to prevent unhandled promise rejection
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      })
 
-      if (error) throw error
+      if (error) {
+        toast.error('Invalid credentials', {
+          description: 'Please check your email and password.',
+          duration: 3000,
+        })
+        return
+      }
 
-      toast.success("Logged in successfully!")
-      router.push("/dashboard")
-    } catch (error) {
-      console.error(error)
-      toast.error("Invalid email or password")
+      if (!data?.user) {
+        toast.error('Login Failed', {
+          description: 'Please try again later.',
+          duration: 3000,
+        })
+        return
+      }
+
+      toast.success('Welcome back!', {
+        description: 'You have successfully logged in.',
+        duration: 3000,
+      })
+      
+      router.push('/dashboard')
+    } catch {
+      // Silently catch any errors and show user-friendly message
+      toast.error('Invalid credentials', {
+        description: 'Please check your email and password.',
+        duration: 3000,
+      })
     } finally {
       setIsLoading(false)
     }

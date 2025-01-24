@@ -14,25 +14,84 @@ import { toast } from "sonner"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
-import { User } from "lucide-react"
+import { BadgeCheck, Crown, KeyRound, User } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 
-const formSchema = z.object({
+// Separate schema for profile form
+const profileFormSchema = z.object({
   nickname: z.string().min(3, "Nickname must be at least 3 characters"),
   email: z.string().email("Invalid email address"),
 })
 
+// Separate schema for password form
+const passwordFormSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+  confirmNewPassword: z.string()
+}).refine((data) => data.newPassword === data.confirmNewPassword, {
+  message: "Passwords don't match",
+  path: ["confirmNewPassword"],
+})
+
+type SubscriptionType = 'free' | 'pro' | 'admin'
+
+interface User {
+  id: string
+  email: string
+  nickname: string
+  avatar_url: string
+  subscription: SubscriptionType
+}
+
+const subscriptionStyles = {
+  free: "bg-muted hover:bg-muted/80",
+  pro: "bg-gradient-to-r from-blue-500/80 to-blue-400/80 text-white hover:from-blue-500/70 hover:to-blue-400/70",
+  admin: "bg-gradient-to-r from-purple-500/80 to-purple-400/80 text-white hover:from-purple-500/70 hover:to-purple-400/70",
+} as const
+
+const subscriptionColors = {
+  free: "bg-muted",
+  pro: "bg-blue-500",
+  admin: "bg-purple-500",
+} as const
+
+const subscriptionIcons = {
+  free: BadgeCheck,
+  pro: Crown,
+  admin: Crown,
+} as const
+
 export default function AccountPage() {
-  const [isLoading, setIsLoading] = React.useState(false)
+  const [isLoadingProfile, setIsLoadingProfile] = React.useState(false)
+  const [isLoadingPassword, setIsLoadingPassword] = React.useState(false)
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null)
-  const [user, setUser] = React.useState<any>(null)
+  const [user, setUser] = React.useState<User | null>(null)
   const supabase = createClient()
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  // Separate form for profile
+  const profileForm = useForm<z.infer<typeof profileFormSchema>>({
+    resolver: zodResolver(profileFormSchema),
     defaultValues: {
       email: "",
       nickname: "",
     },
+    mode: "onChange"
+  })
+
+  // Separate form for password
+  const passwordForm = useForm<z.infer<typeof passwordFormSchema>>({
+    resolver: zodResolver(passwordFormSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmNewPassword: "",
+    },
+    mode: "onChange"
   })
 
   React.useEffect(() => {
@@ -47,7 +106,7 @@ export default function AccountPage() {
 
         if (profile) {
           setUser({ ...user, ...profile })
-          form.reset({
+          profileForm.reset({
             email: user.email || "",
             nickname: profile.nickname || "",
           })
@@ -57,14 +116,15 @@ export default function AccountPage() {
     loadUser()
   }, [])
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
     try {
-      setIsLoading(true)
+      setIsLoadingProfile(true)
+      let hasChanges = false
 
+      // Handle avatar upload if changed
       let avatarUrl = user?.avatar_url
-
-      // Upload new avatar if selected
       if (avatarFile) {
+        hasChanges = true
         const fileExt = avatarFile.name.split('.').pop()
         const fileName = `${Math.random()}.${fileExt}`
         
@@ -85,31 +145,44 @@ export default function AccountPage() {
           .getPublicUrl(fileName)
 
         avatarUrl = publicUrl
-        toast.success("Avatar Uploaded", {
-          description: "Your avatar was uploaded successfully!",
+        toast.success("Avatar Updated", {
+          description: "Your profile picture has been updated successfully!",
           duration: 3000,
         })
       }
 
-      // Update profile
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          nickname: values.nickname,
-          avatar_url: avatarUrl,
+      // Update profile if nickname changed
+      if (values.nickname !== user?.nickname) {
+        hasChanges = true
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            nickname: values.nickname,
+            avatar_url: avatarUrl,
+          })
+          .eq('id', user?.id)
+
+        if (updateError) throw updateError
+        
+        toast.success("Profile Updated", {
+          description: "Your profile information has been updated successfully!",
+          duration: 3000,
         })
-        .eq('id', user.id)
+      } else if (avatarFile) {
+        // Update just the avatar_url if only avatar changed
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            avatar_url: avatarUrl,
+          })
+          .eq('id', user?.id)
 
-      if (updateError) throw updateError
+        if (updateError) throw updateError
+      }
 
-      toast.success("Profile Updated", {
-        description: "Your profile has been updated successfully!",
-        duration: 3000,
-      })
-
-      // Notify other components of the profile update
-      window.dispatchEvent(new CustomEvent('profile-updated'))
-
+      if (hasChanges) {
+        window.dispatchEvent(new CustomEvent('profile-updated'))
+      }
     } catch (error) {
       console.error(error)
       toast.error("Update Failed", {
@@ -117,9 +190,44 @@ export default function AccountPage() {
         duration: 5000,
       })
     } finally {
-      setIsLoading(false)
+      setIsLoadingProfile(false)
     }
   }
+
+  async function onPasswordSubmit(values: z.infer<typeof passwordFormSchema>) {
+    try {
+      setIsLoadingPassword(true)
+
+      const { error: passwordError } = await supabase.auth.updateUser({
+        password: values.newPassword
+      })
+
+      if (passwordError) throw passwordError
+      
+      toast.success("Password Updated", {
+        description: "Your password has been changed successfully!",
+        duration: 3000,
+      })
+
+      // Reset password fields after successful update
+      passwordForm.reset()
+    } catch (error) {
+      console.error(error)
+      toast.error("Password Update Failed", {
+        description: error instanceof Error ? error.message : "Failed to update password",
+        duration: 5000,
+      })
+    } finally {
+      setIsLoadingPassword(false)
+    }
+  }
+
+  const currentSubscription = (user?.subscription || 'free') as SubscriptionType
+  const subscriptionBadgeColor = subscriptionStyles[currentSubscription]
+  const subscriptionAccentColor = subscriptionColors[currentSubscription]
+  const SubscriptionIcon = subscriptionIcons[currentSubscription]
+
+  if (!user) return null
 
   return (
     <SidebarProvider>
@@ -136,63 +244,181 @@ export default function AccountPage() {
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile Settings</CardTitle>
-              <CardDescription>
-                Update your profile information and avatar
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <div className="flex justify-center">
-                    <FileInput
-                      onFileSelect={(file) => setAvatarFile(file)}
-                      previewUrl={user?.avatar_url}
-                    />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Profile Card */}
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b pb-8">
+                <div className="space-y-2">
+                  <CardTitle className="text-2xl">Profile Settings</CardTitle>
+                  <div className="flex flex-col">
+                    <CardDescription className="text-base">
+                      Update your profile information
+                    </CardDescription>
+                    <div className="h-1 w-[140px] mt-2 rounded-full bg-green-500/80" />
                   </div>
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            disabled
-                            type="email"
-                            autoComplete="email"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="nickname"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nickname</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            autoComplete="username"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Saving changes..." : "Save changes"}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <Form {...profileForm}>
+                  <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-8">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-24 h-24">
+                        <FileInput
+                          onFileSelect={(file) => setAvatarFile(file)}
+                          previewUrl={user.avatar_url}
+                        />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Click to upload a new profile picture
+                      </p>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-2">
+                        <User className="h-5 w-5" />
+                        <div>
+                          <h3 className="font-medium">Basic Information</h3>
+                          <div className="h-0.5 w-[120px] mt-2 rounded-full bg-green-500/80" />
+                        </div>
+                      </div>
+                      <div className="grid gap-4">
+                        <FormField
+                          control={profileForm.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  disabled
+                                  type="email"
+                                  autoComplete="email"
+                                  className="bg-muted"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={profileForm.control}
+                          name="nickname"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Nickname</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  autoComplete="username"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-4">
+                      <Button type="submit" className="w-full" disabled={isLoadingProfile}>
+                        {isLoadingProfile ? "Saving changes..." : "Save profile changes"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+
+            {/* Security Card */}
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b pb-8">
+                <div className="space-y-2">
+                  <CardTitle className="text-2xl">Security Settings</CardTitle>
+                  <div className="flex flex-col">
+                    <CardDescription className="text-base">
+                      Update your password
+                    </CardDescription>
+                    <div className="h-1 w-[150px] mt-2 rounded-full bg-green-500/80" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <Form {...passwordForm}>
+                  <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-8">
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="h-5 w-5" />
+                        <div>
+                          <h3 className="font-medium">Change Password</h3>
+                          <div className="h-0.5 w-[130px] mt-2 rounded-full bg-green-500/80" />
+                        </div>
+                      </div>
+                      <div className="grid gap-4">
+                        <FormField
+                          control={passwordForm.control}
+                          name="currentPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Current Password</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="password"
+                                  autoComplete="current-password"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={passwordForm.control}
+                          name="newPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>New Password</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="password"
+                                  autoComplete="new-password"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={passwordForm.control}
+                          name="confirmNewPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Confirm New Password</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="password"
+                                  autoComplete="new-password"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-4">
+                      <Button type="submit" className="w-full" disabled={isLoadingPassword}>
+                        {isLoadingPassword ? "Changing password..." : "Change password"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>

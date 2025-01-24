@@ -16,10 +16,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     name: string
     email: string
     avatar: string
+    subscription: 'free' | 'pro' | 'admin'
   }>({
     name: "",
     email: "",
     avatar: "",
+    subscription: "free"
   })
 
   const loadUser = React.useCallback(async () => {
@@ -38,6 +40,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           name: profile.nickname || authUser.email?.split('@')[0] || '',
           email: authUser.email || '',
           avatar: profile.avatar_url || '',
+          subscription: profile.subscription || 'free'
         })
       }
     }
