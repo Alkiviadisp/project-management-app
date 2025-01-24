@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import Link from "next/link"
 
 export function NavUser({
   user,
@@ -88,9 +89,11 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck />
-                Account
+              <DropdownMenuItem asChild>
+                <Link href="/account">
+                  <BadgeCheck className="mr-2" />
+                  Account
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <CreditCard />
