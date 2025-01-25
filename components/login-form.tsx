@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -26,15 +25,18 @@ import {
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 })
 
 export function LoginForm() {
-  const router = useRouter()
   const [isLoading, setIsLoading] = React.useState(false)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
   const supabase = createClient()
 
   // Add error event listener to window to prevent unhandled errors
@@ -69,58 +71,25 @@ export function LoginForm() {
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true)
-
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      setIsLoading(true)
+      const { error } = await supabase.auth.signInWithPassword({
         email: values.email,
         password: values.password,
       })
 
-      if (error) {
-        // Handle specific error cases
-        switch (error.message) {
-          case 'Invalid login credentials':
-            toast.error('Invalid credentials', {
-              description: 'Please check your email and password.',
-              duration: 3000,
-            })
-            break
-          case 'Email not confirmed':
-            toast.error('Email not verified', {
-              description: 'Please check your email for the verification link.',
-              duration: 5000,
-            })
-            break
-          default:
-            toast.error('Login Failed', {
-              description: 'An unexpected error occurred. Please try again.',
-              duration: 3000,
-            })
-        }
-        return
-      }
+      if (error) throw error
 
-      if (!data?.user) {
-        toast.error('Login Failed', {
-          description: 'Please try again later.',
-          duration: 3000,
-        })
-        return
-      }
-
-      toast.success('Welcome back!', {
-        description: 'You have successfully logged in.',
-        duration: 3000,
+      toast.success("Welcome back!", {
+        description: "You have successfully logged in.",
       })
-      
-      router.push('/dashboard')
+
+      router.push(redirectTo)
+      router.refresh()
     } catch (error) {
-      // Handle unexpected errors
-      console.error('Login error:', error)
-      toast.error('Login Failed', {
-        description: 'An unexpected error occurred. Please try again later.',
-        duration: 3000,
+      console.error(error)
+      toast.error("Login Failed", {
+        description: error instanceof Error ? error.message : "Failed to login",
       })
     } finally {
       setIsLoading(false)
@@ -145,7 +114,13 @@ export function LoginForm() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="m@example.com" {...field} />
+                    <Input
+                      {...field}
+                      type="email"
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      disabled={isLoading}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -158,7 +133,12 @@ export function LoginForm() {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" {...field} />
+                    <Input
+                      {...field}
+                      type="password"
+                      autoComplete="current-password"
+                      disabled={isLoading}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

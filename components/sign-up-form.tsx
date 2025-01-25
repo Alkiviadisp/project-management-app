@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -27,35 +26,31 @@ import { Input } from "@/components/ui/input"
 import { FileInput } from "@/components/ui/file-input"
 import { toast } from "sonner"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
-  nickname: z.string().min(3, "Nickname must be at least 3 characters"),
   password: z.string()
     .min(8, "Password must be at least 8 characters")
     .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
     .regex(/[a-z]/, "Password must contain at least one lowercase letter")
     .regex(/[0-9]/, "Password must contain at least one number")
     .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+  nickname: z.string().min(3, "Nickname must be at least 3 characters"),
 })
 
 export function SignUpForm() {
-  const router = useRouter()
   const [isLoading, setIsLoading] = React.useState(false)
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null)
+  const router = useRouter()
   const supabase = createClient()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       email: "",
-      nickname: "",
       password: "",
-      confirmPassword: "",
+      nickname: "",
     },
   })
 
@@ -204,7 +199,7 @@ export function SignUpForm() {
                   <FormLabel>Email</FormLabel>
                   <FormControl>
                     <Input 
-                      placeholder="m@example.com" 
+                      placeholder="you@example.com" 
                       type="email"
                       autoComplete="email"
                       {...field} 
@@ -221,8 +216,8 @@ export function SignUpForm() {
                 <FormItem>
                   <FormLabel>Nickname</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="johndoe" 
+                    <Input
+                      placeholder="johndoe"
                       autoComplete="username"
                       {...field} 
                     />
@@ -238,27 +233,10 @@ export function SignUpForm() {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="password"
                       autoComplete="new-password"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="password"
-                      autoComplete="new-password"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
