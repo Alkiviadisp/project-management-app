@@ -10,6 +10,9 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
+import Link from "next/link"
+import { LayoutDashboard, FolderKanban, User } from "lucide-react"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [user, setUser] = React.useState<{

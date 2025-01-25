@@ -51,8 +51,7 @@ export function NavPages() {
                     href={page.url}
                     className={cn(
                       "flex h-9 items-center rounded-lg px-2",
-                      isActive && "bg-accent",
-                      "hover:bg-accent",
+                      isActive ? "bg-blue-600 text-white" : "hover:bg-accent",
                       "data-[state=collapsed]:justify-center data-[state=collapsed]:w-9",
                       "data-[state=expanded]:w-full data-[state=expanded]:justify-start",
                     )}

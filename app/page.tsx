@@ -16,7 +16,7 @@ export default function Home() {
           The all-in-one solution for modern project management.
         </p>
         <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
-          <Button asChild size="lg" className="gap-2">
+          <Button asChild size="lg" className="gap-2 bg-[hsl(241,70%,54%)] text-white hover:bg-[hsl(241,70%,45%)]">
             <Link href="/signup">Get Started</Link>
           </Button>
           <Button asChild variant="outline" size="lg">

@@ -2,6 +2,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { FolderKanban, Plus } from "lucide-react"
+import Link from "next/link"
 import {
   SidebarInset,
   SidebarProvider,
@@ -23,9 +24,11 @@ export default function ProjectsPage() {
                 <h1 className="text-xl font-semibold">Projects</h1>
               </div>
             </div>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Project
+            <Button asChild className="gap-2">
+              <Link href="/projects/new">
+                <Plus className="h-4 w-4" />
+                Add Project
+              </Link>
             </Button>
           </div>
         </header>
