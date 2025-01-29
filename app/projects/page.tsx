@@ -259,8 +259,15 @@ export default function ProjectsPage() {
                             </DialogContent>
                           </Dialog>
                         ) : (
-                          <div className={cn("h-full w-full flex items-center justify-center", project.color)}>
-                            <FolderKanban className="h-8 w-8 text-white/90" />
+                          <div className={cn("h-full w-full relative overflow-hidden", project.color)}>
+                            <img
+                              src="https://images.unsplash.com/photo-1557683311-eac922347aa1?q=80&w=1000&auto=format&fit=crop"
+                              alt="Default project image"
+                              className="h-full w-full object-cover opacity-20"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <FolderKanban className="h-8 w-8 text-white/90" />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -268,7 +275,7 @@ export default function ProjectsPage() {
                       <div className="p-3">
                         <div className="space-y-3">
                           <div className="space-y-1">
-                            <h3 className={cn("text-base font-semibold line-clamp-1", colors.text)}>
+                            <h3 className="text-base font-semibold line-clamp-1 text-gray-900">
                               {project.title}
                             </h3>
                             <p className="text-xs text-muted-foreground line-clamp-2">
