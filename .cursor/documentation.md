@@ -33,6 +33,9 @@ This is a modern project management application built with Next.js, React, and S
   - Color-coded status
   - Project descriptions
   - Quick action buttons
+  - Due dates
+  - Priority indicators
+  - Tags
 
 ### 3. Project Management
 #### Project Creation
@@ -42,28 +45,53 @@ This is a modern project management application built with Next.js, React, and S
     - Project Owner
     - Status (Not Started, In Progress, Completed)
     - Priority (Low, Medium, High)
-    - Due Date
+    - Due Date with Calendar Picker
   - Detailed Information:
     - Description
     - Tags (comma-separated)
-    - File Attachments
+    - File Attachments with preview
     - Initial Comments
 - Form validation using Zod
 - File upload functionality to Supabase storage
 
 #### Project Features
-- Project status tracking
-- Priority management
-- Tag system
-- File attachment support
-- Comments/Notes system
+- Project status tracking with color coding
+- Priority management with visual indicators
+- Tag system with custom styling
+- File attachment support with preview
 - Progress tracking
+- Due date management with calendar integration
 
 ### 4. Tasks
-- Task listing and management
-- Task status tracking
-- Task descriptions
-- Connection to projects
+#### Task Management
+- Comprehensive task creation and management
+- Task listing with status indicators
+- Task features include:
+  - Title and description
+  - Due date with calendar picker
+  - Status tracking (Pending/Completed)
+  - Creation and due dates display
+  - Quick status toggle
+  - Delete functionality
+
+#### Task Creation Form
+- Modal-based task creation interface
+- Form fields include:
+  - Task title with validation
+  - Optional description
+  - Due date selection with calendar
+- Real-time form validation
+- Loading states during creation
+- Success/error notifications
+
+#### Task List Features
+- Visual status indicators
+- Due date tracking
+- Creation date display
+- Hover effects for better UX
+- Quick actions menu
+- Status toggle with checkbox
+- Delete confirmation
 
 ## Implementation Details
 
@@ -71,38 +99,52 @@ This is a modern project management application built with Next.js, React, and S
 - Supabase authentication integration
 - Protected routes
 - User profile management
+- Per-user data isolation
 
 ### Data Structure
-- Projects table with fields:
-  - title
-  - description
-  - owner_id
-  - status
-  - due_date
-  - priority
-  - tags
-  - attachments
-  - comments
+#### Projects Table
+- title: string
+- description: string
+- owner_id: string (foreign key to users)
+- status: enum ('todo', 'in-progress', 'done')
+- due_date: timestamp
+- priority: enum ('low', 'medium', 'high')
+- tags: string[]
+- attachments: jsonb
+- created_at: timestamp
+- created_by: string (foreign key to users)
+
+#### Tasks Table
+- title: string
+- description: string
+- due_date: timestamp
+- status: enum ('pending', 'completed')
+- project_id: string (foreign key to projects)
+- created_by: string (foreign key to users)
+- created_at: timestamp
+- updated_at: timestamp
 
 ### UI/UX Features
 1. **Form Components**:
-   - Custom input fields
-   - Date picker
-   - File upload with preview
-   - Tag input with badge display
-   - Rich text areas
-   - Validation feedback
+   - Custom input fields with validation
+   - Calendar date picker with Popover
+   - Rich text areas for descriptions
+   - Form validation feedback
+   - Loading states
+   - Success/error notifications
 
 2. **Navigation**:
    - Collapsible sidebar
    - Breadcrumb navigation
    - Active state indicators
    - Mobile-responsive menu
+   - Back navigation
 
 3. **Notifications**:
    - Toast notifications for actions
    - Loading states
    - Error handling
+   - Success confirmations
 
 ### Styling Guidelines
 - Blue primary color (#2563eb)
@@ -111,6 +153,9 @@ This is a modern project management application built with Next.js, React, and S
 - Responsive design breakpoints
 - Shadow and border styling for cards
 - Hover and active states
+- Color coding for status and priority
+- Gradient backgrounds
+- Custom calendar styling
 
 ## Best Practices
 1. **Code Organization**:
@@ -118,24 +163,27 @@ This is a modern project management application built with Next.js, React, and S
    - Separation of concerns
    - Reusable UI components
    - Type safety with TypeScript
+   - Zod schema validation
 
 2. **Performance**:
    - Optimized images
    - Lazy loading
    - Client-side caching
    - Efficient state management
+   - Form state management with React Hook Form
 
 3. **Security**:
-   - Form validation
+   - Form validation with Zod
    - Protected routes
-   - Secure file uploads
    - Data sanitization
+   - User-specific data access
 
 4. **Accessibility**:
    - ARIA labels
    - Keyboard navigation
    - Focus management
    - Screen reader support
+   - Proper heading hierarchy
 
 ## Development Guidelines
 1. **Component Creation**:
@@ -143,24 +191,28 @@ This is a modern project management application built with Next.js, React, and S
    - Implement proper TypeScript types
    - Follow naming conventions
    - Include proper documentation
+   - Use React Hook Form for forms
 
 2. **Styling**:
    - Use TailwindCSS utilities
    - Follow mobile-first approach
    - Maintain consistent spacing
    - Use design system variables
+   - Implement proper hover states
 
 3. **State Management**:
    - Use React hooks effectively
    - Implement proper error handling
    - Manage loading states
    - Handle form validation
+   - Use Zod for schema validation
 
 4. **Testing**:
    - Write unit tests for components
    - Test form validation
    - Test API integration
    - Test responsive design
+   - Test error scenarios
 
 ## Deployment
 - Vercel deployment recommended
@@ -169,5 +221,4 @@ This is a modern project management application built with Next.js, React, and S
 - Database migrations
 - Storage bucket configuration
 
-
-when you make changes to the database always update the schema.sql file and give me the sql code to run it to the supabase database.
+When making changes to the database always update the schema.sql file and provide the SQL code to run in the Supabase database.
