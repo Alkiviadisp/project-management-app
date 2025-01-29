@@ -11,20 +11,35 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Plus, FolderKanban, CalendarDays, Clock, Tag, Paperclip } from "lucide-react"
+import { Plus, FolderKanban, CalendarDays, Clock, Tag, Paperclip, Edit2, Trash2, MoreVertical } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 
 type Project = {
   id: string
   title: string
   description: string
-  status: "not_started" | "in_progress" | "completed"
+  status: "todo" | "in-progress" | "done"
   due_date: string
   priority: "low" | "medium" | "high"
   tags: string[]
-  attachments: string[]
+  attachments: Array<{
+    url: string
+    name: string
+    type: string
+    size: number
+    path: string
+  }>
   color: string
   created_at: string
 }
@@ -33,6 +48,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const supabase = createClient()
+  const router = useRouter()
 
   React.useEffect(() => {
     async function fetchProjects() {
@@ -60,11 +76,11 @@ export default function ProjectsPage() {
 
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
-      case 'not_started':
+      case 'todo':
         return 'bg-gray-100 text-gray-700'
-      case 'in_progress':
+      case 'in-progress':
         return 'bg-blue-100 text-blue-700'
-      case 'completed':
+      case 'done':
         return 'bg-green-100 text-green-700'
     }
   }
@@ -78,6 +94,43 @@ export default function ProjectsPage() {
       case 'high':
         return 'bg-red-100 text-red-700'
     }
+  }
+
+  const getCardColors = (baseColor: string) => {
+    const colors: { [key: string]: { bg: string, hover: string, text: string, border: string } } = {
+      'bg-blue-500': { bg: 'bg-blue-50', hover: 'hover:bg-blue-100', text: 'text-blue-700', border: 'border-blue-100' },
+      'bg-purple-500': { bg: 'bg-purple-50', hover: 'hover:bg-purple-100', text: 'text-purple-700', border: 'border-purple-100' },
+      'bg-pink-500': { bg: 'bg-pink-50', hover: 'hover:bg-pink-100', text: 'text-pink-700', border: 'border-pink-100' },
+      'bg-indigo-500': { bg: 'bg-indigo-50', hover: 'hover:bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-100' },
+      'bg-teal-500': { bg: 'bg-teal-50', hover: 'hover:bg-teal-100', text: 'text-teal-700', border: 'border-teal-100' },
+      'bg-green-500': { bg: 'bg-green-50', hover: 'hover:bg-green-100', text: 'text-green-700', border: 'border-green-100' },
+      'bg-yellow-500': { bg: 'bg-yellow-50', hover: 'hover:bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-100' },
+      'bg-orange-500': { bg: 'bg-orange-50', hover: 'hover:bg-orange-100', text: 'text-orange-700', border: 'border-orange-100' },
+      'bg-red-500': { bg: 'bg-red-50', hover: 'hover:bg-red-100', text: 'text-red-700', border: 'border-red-100' },
+      'bg-cyan-500': { bg: 'bg-cyan-50', hover: 'hover:bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-100' },
+    }
+    return colors[baseColor] || colors['bg-blue-500']
+  }
+
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId)
+
+      if (error) throw error
+
+      setProjects(projects.filter(project => project.id !== projectId))
+      toast.success("Project deleted successfully")
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      toast.error("Failed to delete project")
+    }
+  }
+
+  const handleEditProject = (projectId: string) => {
+    router.push(`/projects/new?edit=${projectId}`)
   }
 
   return (
@@ -139,71 +192,138 @@ export default function ProjectsPage() {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects.map((project) => (
-                  <div
-                    key={project.id}
-                    className="group relative overflow-hidden rounded-xl border bg-white transition-all hover:shadow-lg"
-                  >
-                    <div className={cn("h-2 w-full", project.color)} />
-                    <div className="p-6">
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <h3 className="text-xl font-semibold line-clamp-1">
-                            {project.title}
-                          </h3>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {project.description}
-                          </p>
-                        </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {projects.map((project) => {
+                  const colors = getCardColors(project.color)
+                  const firstAttachment = project.attachments?.[0]
 
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="secondary" className={cn("px-2 py-0.5", getStatusColor(project.status))}>
-                            {project.status.replace('_', ' ')}
-                          </Badge>
-                          <Badge variant="secondary" className={cn("px-2 py-0.5", getPriorityColor(project.priority))}>
-                            {project.priority}
-                          </Badge>
-                        </div>
+                  return (
+                    <div
+                      key={project.id}
+                      className={cn(
+                        "group relative overflow-hidden rounded-lg border transition-all hover:shadow-md",
+                        colors.bg,
+                        colors.border,
+                        colors.hover
+                      )}
+                    >
+                      <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleEditProject(project.id)
+                          }}
+                          className="h-7 w-7 bg-white/80 hover:bg-white shadow-sm hover:text-blue-600"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            if (window.confirm('Are you sure you want to delete this project?')) {
+                              handleDeleteProject(project.id)
+                            }
+                          }}
+                          className="h-7 w-7 bg-white/80 hover:bg-white shadow-sm hover:text-red-600"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
 
-                        <div className="space-y-3 pt-2">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <CalendarDays className="h-4 w-4" />
-                            <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                      <div className="aspect-[3/2] w-full overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
+                        {firstAttachment ? (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <img
+                                src={firstAttachment.url}
+                                alt={firstAttachment.name}
+                                className="h-full w-full object-cover transition-transform duration-300 hover:scale-105 cursor-zoom-in"
+                              />
+                            </DialogTrigger>
+                            <DialogContent className="max-w-3xl">
+                              <DialogHeader>
+                                <DialogTitle>{project.title}</DialogTitle>
+                                <DialogDescription>Project Image</DialogDescription>
+                              </DialogHeader>
+                              <img
+                                src={firstAttachment.url}
+                                alt={firstAttachment.name}
+                                className="w-full rounded-lg"
+                              />
+                            </DialogContent>
+                          </Dialog>
+                        ) : (
+                          <div className={cn("h-full w-full flex items-center justify-center", project.color)}>
+                            <FolderKanban className="h-8 w-8 text-white/90" />
                           </div>
-                          {project.tags.length > 0 && (
-                            <div className="flex items-center gap-2">
-                              <Tag className="h-4 w-4 text-muted-foreground" />
-                              <div className="flex flex-wrap gap-1">
-                                {project.tags.map((tag, index) => (
-                                  <Badge
-                                    key={index}
-                                    variant="secondary"
-                                    className="px-2 py-0.5 text-xs bg-blue-50 text-blue-700"
-                                  >
-                                    {tag}
-                                  </Badge>
-                                ))}
+                        )}
+                      </div>
+
+                      <div className="p-3">
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <h3 className={cn("text-base font-semibold line-clamp-1", colors.text)}>
+                              {project.title}
+                            </h3>
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {project.description}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(project.status))}>
+                              {project.status.replace('-', ' ')}
+                            </Badge>
+                            <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getPriorityColor(project.priority))}>
+                              {project.priority}
+                            </Badge>
+                          </div>
+
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <CalendarDays className="h-3 w-3" />
+                              <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                            </div>
+                            {project.tags.length > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <Tag className="h-3 w-3 text-muted-foreground" />
+                                <div className="flex flex-wrap gap-1">
+                                  {project.tags.map((tag, index) => (
+                                    <Badge
+                                      key={index}
+                                      variant="secondary"
+                                      className={cn("px-1.5 py-0 text-xs", colors.bg, colors.text)}
+                                    >
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                          )}
-                          {project.attachments.length > 0 && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Paperclip className="h-4 w-4" />
-                              <span>{project.attachments.length} attachments</span>
-                            </div>
-                          )}
+                            )}
+                            {project.attachments.length > 1 && (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Paperclip className="h-3 w-3" />
+                                <span>{project.attachments.length} attachments</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      <Link 
+                        href={`/projects/${project.id}`} 
+                        className="absolute inset-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      >
+                        <span className="sr-only">View project</span>
+                      </Link>
                     </div>
-                    <Link 
-                      href={`/projects/${project.id}`} 
-                      className="absolute inset-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                      <span className="sr-only">View project</span>
-                    </Link>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

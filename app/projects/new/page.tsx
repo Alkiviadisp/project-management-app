@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   Form,
   FormControl,
@@ -75,7 +75,10 @@ export default function NewProjectPage() {
   const [files, setFiles] = React.useState<File[]>([])
   const [tagsInput, setTagsInput] = React.useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+  const editId = searchParams.get('edit')
+  const [isEditing, setIsEditing] = React.useState(false)
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectFormSchema),
@@ -83,16 +86,55 @@ export default function NewProjectPage() {
     mode: "onChange",
   })
 
+  React.useEffect(() => {
+    async function fetchProject() {
+      if (!editId) return
+
+      try {
+        setIsLoading(true)
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('id', editId)
+          .single()
+
+        if (error) throw error
+        if (!data) throw new Error('Project not found')
+
+        // Set form values
+        form.reset({
+          title: data.title,
+          description: data.description,
+          owner: data.owner || '',
+          status: data.status,
+          dueDate: new Date(data.due_date),
+          priority: data.priority,
+          tags: data.tags || [],
+          attachments: data.attachments || [],
+        })
+
+        // Set tags input
+        setTagsInput(data.tags?.join(', ') || '')
+        setIsEditing(true)
+      } catch (error) {
+        console.error('Error fetching project:', error)
+        toast.error('Failed to fetch project')
+        router.push('/projects')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProject()
+  }, [editId, form, router, supabase])
+
   async function onSubmit(data: ProjectFormValues) {
     try {
       setIsLoading(true)
 
       // Get current user first
       const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) {
-        console.error('User error:', userError)
-        throw userError
-      }
+      if (userError) throw userError
       if (!user) throw new Error("User not found")
 
       // Handle file uploads
@@ -184,7 +226,14 @@ export default function NewProjectPage() {
         throw new Error("No files were uploaded successfully")
       }
 
-      // Generate a random color for the project
+      // If editing, merge with existing attachments
+      let finalAttachments = uploadedFiles
+      if (isEditing) {
+        const existingAttachments = data.attachments || []
+        finalAttachments = [...existingAttachments, ...uploadedFiles]
+      }
+
+      // Generate a random color for new projects
       const colors = [
         'bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 
         'bg-teal-500', 'bg-green-500', 'bg-yellow-500', 'bg-orange-500',
@@ -192,40 +241,44 @@ export default function NewProjectPage() {
       ]
       const randomColor = colors[Math.floor(Math.random() * colors.length)]
 
-      console.log('Creating project with data:', {
+      const projectData = {
         title: data.title,
-        attachments: uploadedFiles,
-        color: randomColor
-      })
-
-      // Create project in database
-      const { error: insertError } = await supabase
-        .from('projects')
-        .insert({
-          title: data.title,
-          description: data.description,
-          created_by: user.id,
-          status: data.status,
-          due_date: data.dueDate.toISOString(),
-          priority: data.priority,
-          tags: data.tags || [],
-          attachments: uploadedFiles,
-          color: randomColor
-        })
-
-      if (insertError) {
-        console.error('Project creation error:', insertError)
-        throw new Error(`Failed to create project: ${insertError.message}`)
+        description: data.description,
+        created_by: user.id,
+        status: data.status,
+        due_date: data.dueDate.toISOString(),
+        priority: data.priority,
+        tags: data.tags || [],
+        attachments: finalAttachments,
+        color: isEditing ? undefined : randomColor // Only set color for new projects
       }
 
-      toast.success("Project Created", {
-        description: "Your project has been created successfully.",
+      let error
+      if (isEditing) {
+        const { error: updateError } = await supabase
+          .from('projects')
+          .update(projectData)
+          .eq('id', editId)
+        error = updateError
+      } else {
+        const { error: insertError } = await supabase
+          .from('projects')
+          .insert(projectData)
+        error = insertError
+      }
+
+      if (error) throw error
+
+      toast.success(isEditing ? "Project Updated" : "Project Created", {
+        description: isEditing 
+          ? "Your project has been updated successfully."
+          : "Your project has been created successfully.",
       })
 
       router.push("/projects")
     } catch (error) {
       console.error('Submission error:', error)
-      toast.error("Failed to create project", {
+      toast.error(isEditing ? "Failed to update project" : "Failed to create project", {
         description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
       })
     } finally {
@@ -268,10 +321,12 @@ export default function NewProjectPage() {
                 <div className="text-sm text-muted-foreground">Fill in the project details below</div>
               </div>
               <h1 className="text-4xl font-bold tracking-tight">
-                Create New Project
+                {isEditing ? 'Edit Project' : 'Create New Project'}
               </h1>
               <p className="mt-4 text-muted-foreground text-lg max-w-2xl">
-                Start by filling in the essential information about your project. You can always update these details later.
+                {isEditing 
+                  ? 'Update your project information below. All fields can be modified.'
+                  : 'Start by filling in the essential information about your project. You can always update these details later.'}
               </p>
             </div>
 
@@ -606,10 +661,10 @@ export default function NewProjectPage() {
                       {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          Creating Project...
+                          {isEditing ? 'Updating Project...' : 'Creating Project...'}
                         </>
                       ) : (
-                        "Create Project"
+                        isEditing ? 'Update Project' : 'Create Project'
                       )}
                     </Button>
                   </div>
