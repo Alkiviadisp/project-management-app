@@ -338,4 +338,136 @@ BEGIN
 END$$;
 
 -- Final schema cache refresh
-NOTIFY pgrst, 'reload schema'; 
+NOTIFY pgrst, 'reload schema';
+
+-- Create necessary extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create tables
+CREATE TABLE IF NOT EXISTS public.users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  avatar_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.projects (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title TEXT NOT NULL,
+  description TEXT,
+  created_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('not_started', 'in_progress', 'completed')),
+  due_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  priority TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high')),
+  tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+  attachments JSONB DEFAULT '[]'::jsonb,
+  color TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Create storage bucket for project attachments
+INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
+VALUES (
+  'project-attachments',
+  'project-attachments',
+  true,
+  false,
+  10485760,  -- 10MB limit
+  '{image/jpeg,image/png,image/gif,image/webp}'
+) ON CONFLICT (id) DO NOTHING;
+
+-- Enable RLS
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS projects_owner_id_idx ON public.projects(created_by);
+CREATE INDEX IF NOT EXISTS projects_created_at_idx ON public.projects(created_at DESC);
+
+-- Create functions for handling timestamps
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = timezone('utc'::text, now());
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create function to handle deleted project attachments
+CREATE OR REPLACE FUNCTION public.handle_deleted_project()
+RETURNS TRIGGER AS $$
+DECLARE
+  attachment JSONB;
+BEGIN
+  -- Loop through attachments and delete files from storage
+  FOR attachment IN SELECT * FROM jsonb_array_elements(OLD.attachments)
+  LOOP
+    -- Delete the file from storage
+    DELETE FROM storage.objects
+    WHERE bucket_id = 'project-attachments'
+    AND name = (attachment->>'path');
+  END LOOP;
+  
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create triggers
+DROP TRIGGER IF EXISTS set_users_updated_at ON public.users;
+CREATE TRIGGER set_users_updated_at
+  BEFORE UPDATE ON public.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS set_projects_updated_at ON public.projects;
+CREATE TRIGGER set_projects_updated_at
+  BEFORE UPDATE ON public.projects
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS cleanup_project_attachments ON public.projects;
+CREATE TRIGGER cleanup_project_attachments
+  BEFORE DELETE ON public.projects
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_deleted_project();
+
+-- Set up RLS policies
+
+-- Users policies
+CREATE POLICY "Users can view own profile" ON public.users
+  FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile" ON public.users
+  FOR UPDATE USING (auth.uid() = id);
+
+-- Projects policies
+CREATE POLICY "Users can view own projects" ON public.projects
+  FOR SELECT USING (auth.uid() = created_by);
+
+CREATE POLICY "Users can create own projects" ON public.projects
+  FOR INSERT WITH CHECK (auth.uid() = created_by);
+
+CREATE POLICY "Users can update own projects" ON public.projects
+  FOR UPDATE USING (auth.uid() = created_by);
+
+CREATE POLICY "Users can delete own projects" ON public.projects
+  FOR DELETE USING (auth.uid() = created_by);
+
+-- Storage policies
+CREATE POLICY "Give users authenticated access to own folder" ON storage.objects
+  FOR ALL USING (
+    auth.role() = 'authenticated' AND
+    (bucket_id = 'project-attachments' AND auth.uid()::text = (storage.foldername(name))[1])
+  );
+
+CREATE POLICY "Give public access to view files" ON storage.objects
+  FOR SELECT USING (bucket_id = 'project-attachments');
+
+-- Add comments for documentation
+COMMENT ON TABLE public.projects IS 'Stores project information';
+COMMENT ON COLUMN public.projects.attachments IS 'Array of file attachments with structure: [{url: string, name: string, type: string, size: number, path: string}]';
+COMMENT ON COLUMN public.projects.color IS 'Tailwind CSS color class for the project card'; 
