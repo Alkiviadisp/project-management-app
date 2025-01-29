@@ -86,3 +86,118 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Calendar Styles */
+.rdp {
+  --rdp-cell-size: 40px;
+  --rdp-accent-color: rgb(var(--primary));
+  --rdp-background-color: rgb(var(--primary) / 0.1);
+  --rdp-accent-color-dark: rgb(var(--primary));
+  --rdp-background-color-dark: rgb(var(--primary) / 0.2);
+  --rdp-outline: 2px solid var(--rdp-accent-color);
+  --rdp-outline-selected: 2px solid var(--rdp-accent-color);
+  margin: 0;
+}
+
+.rdp-button {
+  width: var(--rdp-cell-size);
+  height: var(--rdp-cell-size);
+  border-radius: 100%;
+}
+
+.rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+  background-color: rgb(var(--primary) / 0.1);
+}
+
+.rdp-day_selected,
+.rdp-day_selected:focus-visible,
+.rdp-day_selected:hover {
+  background-color: rgb(var(--primary)) !important;
+  color: rgb(var(--primary-foreground)) !important;
+}
+
+.rdp-months {
+  display: flex;
+}
+
+.rdp-month {
+  margin: 0;
+}
+
+.rdp-table {
+  margin: 0;
+  max-width: 100%;
+}
+
+.rdp-head_cell {
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  color: rgb(var(--muted-foreground));
+}
+
+.rdp-tbody {
+  border-collapse: separate;
+  border-spacing: 2px;
+}
+
+.rdp-day {
+  width: var(--rdp-cell-size);
+  height: var(--rdp-cell-size);
+  font-size: 0.875rem;
+  color: rgb(var(--foreground));
+  cursor: pointer;
+}
+
+.rdp-day_disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rdp-day_today {
+  font-weight: 600;
+  color: rgb(var(--primary));
+}
+
+.rdp-nav {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem;
+}
+
+.rdp-nav_button {
+  width: var(--rdp-cell-size);
+  height: var(--rdp-cell-size);
+  padding: 0.5rem;
+  border-radius: 100%;
+  color: rgb(var(--foreground));
+  cursor: pointer;
+}
+
+.rdp-nav_button:hover {
+  background-color: rgb(var(--primary) / 0.1);
+}
+
+.rdp-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.5rem;
+  text-align: left;
+}
+
+.rdp-caption_label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--foreground));
+}
+
+.calendar-wrapper {
+  position: relative;
+  z-index: 50;
+}
+
+[data-radix-popper-content-wrapper] {
+  z-index: 50 !important;
+}

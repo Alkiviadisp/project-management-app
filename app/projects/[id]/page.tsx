@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   Circle,
   ArrowLeft,
-  MoreVertical
+  MoreVertical,
+  Calendar as CalendarIcon
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
@@ -44,6 +45,23 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
 
 type Project = {
   id: string
@@ -68,12 +86,21 @@ type Task = {
   id: string
   title: string
   description: string | null
+  due_date: string | null
   status: "pending" | "completed"
   project_id: string
   created_by: string
   created_at: string
   updated_at: string
 }
+
+const taskFormSchema = z.object({
+  title: z.string().min(3, "Title must be at least 3 characters"),
+  description: z.string().optional(),
+  due_date: z.date().optional(),
+})
+
+type TaskFormValues = z.infer<typeof taskFormSchema>
 
 export default function ProjectDetailsPage() {
   const params = useParams()
@@ -82,9 +109,17 @@ export default function ProjectDetailsPage() {
   const [tasks, setTasks] = React.useState<Task[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [isCreatingTask, setIsCreatingTask] = React.useState(false)
-  const [newTask, setNewTask] = React.useState({ title: "", description: "" })
+  const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const supabase = createClient()
   const router = useRouter()
+  const form = useForm<TaskFormValues>({
+    resolver: zodResolver(taskFormSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      due_date: undefined,
+    },
+  })
 
   React.useEffect(() => {
     async function fetchProjectAndTasks() {
@@ -159,8 +194,8 @@ export default function ProjectDetailsPage() {
     fetchProjectAndTasks()
   }, [projectId, supabase, router])
 
-  const handleCreateTask = async () => {
-    if (!newTask.title.trim()) {
+  const handleCreateTask = async (values: TaskFormValues) => {
+    if (!values.title.trim()) {
       toast.error("Task title is required")
       return
     }
@@ -173,8 +208,9 @@ export default function ProjectDetailsPage() {
       const { data, error } = await supabase
         .from('tasks')
         .insert({
-          title: newTask.title,
-          description: newTask.description,
+          title: values.title,
+          description: values.description,
+          due_date: values.due_date?.toISOString() || null,
           status: 'pending',
           project_id: projectId,
           created_by: user.id
@@ -185,7 +221,8 @@ export default function ProjectDetailsPage() {
       if (error) throw error
 
       setTasks(prev => [data, ...prev])
-      setNewTask({ title: "", description: "" })
+      form.reset()
+      setIsDialogOpen(false)
       toast.success("Task created successfully")
     } catch (error) {
       console.error('Error creating task:', error)
@@ -236,20 +273,13 @@ export default function ProjectDetailsPage() {
         .eq('id', taskId)
         .eq('created_by', user.id)
 
-      if (error) {
-        console.error('Error deleting task:', error)
-        throw error
-      }
+      if (error) throw error
 
       setTasks(prev => prev.filter(task => task.id !== taskId))
       toast.success("Task deleted successfully")
     } catch (error) {
       console.error('Error deleting task:', error)
-      if (error instanceof Error) {
-        toast.error(error.message)
-      } else {
-        toast.error("Failed to delete task")
-      }
+      toast.error("Failed to delete task")
     }
   }
 
@@ -296,7 +326,7 @@ export default function ProjectDetailsPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => router.back()}
-                className="rounded-lg hover:bg-blue-50"
+                className="rounded-lg hover:bg-blue-50 text-blue-600"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Projects
@@ -306,172 +336,279 @@ export default function ProjectDetailsPage() {
         </header>
 
         <main className="flex flex-col items-center justify-start py-8 px-4">
-          <div className="w-full max-w-5xl space-y-8">
+          <div className="w-full max-w-5xl space-y-6">
             {/* Project Header */}
-            <div className="rounded-xl border bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between">
-                <div className="space-y-4">
-                  <h1 className="text-2xl font-bold text-gray-900">{project.title}</h1>
-                  <p className="text-sm text-muted-foreground max-w-2xl">{project.description}</p>
-                  
-                  <div className="flex flex-wrap gap-3">
-                    <Badge variant="secondary" className={cn("px-2 py-1", getStatusColor(project.status))}>
-                      {project.status.replace('-', ' ')}
-                    </Badge>
-                    <Badge variant="secondary" className={cn("px-2 py-1", getPriorityColor(project.priority))}>
-                      {project.priority}
-                    </Badge>
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <CalendarDays className="h-4 w-4" />
-                      <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+            <div className="relative overflow-hidden rounded-2xl border bg-white shadow-sm">
+              {/* Background Pattern */}
+              <div className="absolute inset-0 opacity-5">
+                <div className="absolute inset-0" style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                }} />
+              </div>
+              
+              {/* Content */}
+              <div className="relative p-8">
+                <div className="flex items-start justify-between gap-8">
+                  <div className="space-y-4 flex-grow">
+                    <div className="space-y-2">
+                      <h1 className="text-3xl font-bold tracking-tight text-gray-900">{project.title}</h1>
+                      <p className="text-base text-muted-foreground max-w-2xl leading-relaxed">{project.description}</p>
                     </div>
+                    
+                    <div className="flex flex-wrap items-center gap-4">
+                      <Badge variant="secondary" className={cn("px-3 py-1 text-sm font-medium rounded-full", getStatusColor(project.status))}>
+                        {project.status.replace('-', ' ')}
+                      </Badge>
+                      <Badge variant="secondary" className={cn("px-3 py-1 text-sm font-medium rounded-full", getPriorityColor(project.priority))}>
+                        {project.priority}
+                      </Badge>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground bg-gray-50 px-3 py-1 rounded-full">
+                        <CalendarDays className="h-4 w-4" />
+                        <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                      </div>
+                    </div>
+
+                    {project.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {project.tags.map((tag, index) => (
+                          <Badge
+                            key={index}
+                            variant="secondary"
+                            className="bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 text-sm font-medium rounded-full"
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {project.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {project.tags.map((tag, index) => (
-                        <Badge
-                          key={index}
-                          variant="secondary"
-                          className="bg-blue-50 text-blue-700 hover:bg-blue-100"
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
+                  {project.attachments?.[0] && (
+                    <div className="hidden sm:block flex-shrink-0">
+                      <img
+                        src={project.attachments[0].url}
+                        alt={project.attachments[0].name}
+                        className="h-40 w-40 rounded-xl object-cover ring-2 ring-white shadow-lg"
+                      />
                     </div>
                   )}
                 </div>
-
-                {project.attachments?.[0] && (
-                  <div className="hidden sm:block">
-                    <img
-                      src={project.attachments[0].url}
-                      alt={project.attachments[0].name}
-                      className="h-32 w-32 rounded-lg object-cover"
-                    />
-                  </div>
-                )}
               </div>
             </div>
 
             {/* Tasks Section */}
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Tasks</h2>
-                <Dialog>
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-semibold text-gray-900">Tasks</h2>
+                  <p className="text-sm text-muted-foreground">Manage and track your project tasks</p>
+                </div>
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Task
+                    <Button 
+                      onClick={() => setIsDialogOpen(true)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Task
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                       <DialogTitle>Create New Task</DialogTitle>
                       <DialogDescription>
-                        Add a new task to this project. Tasks help you break down your project into manageable pieces.
+                        Break down your project into manageable tasks to track progress effectively.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Task Title</label>
-                        <Input
-                          placeholder="Enter task title"
-                          value={newTask.title}
-                          onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(handleCreateTask)} className="space-y-4 py-4">
+                        <FormField
+                          control={form.control}
+                          name="title"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium">Task Title</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="Enter task title"
+                                  className="h-12 text-base"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Description</label>
-                        <Textarea
-                          placeholder="Enter task description"
-                          value={newTask.description}
-                          onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium">Description</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Enter task description"
+                                  className="min-h-[120px] resize-none text-base"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        onClick={handleCreateTask}
-                        disabled={isCreatingTask}
-                        className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white"
-                      >
-                        {isCreatingTask ? "Creating..." : "Create Task"}
-                      </Button>
-                    </DialogFooter>
+                        <FormField
+                          control={form.control}
+                          name="due_date"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                              <FormLabel className="text-sm font-medium">Due Date</FormLabel>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <FormControl>
+                                    <Button
+                                      variant="outline"
+                                      className={cn(
+                                        "w-full h-12 pl-3 text-left font-normal text-base transition-colors hover:border-blue-200 focus:border-blue-400",
+                                        !field.value && "text-muted-foreground"
+                                      )}
+                                    >
+                                      {field.value ? (
+                                        format(field.value, "PPP")
+                                      ) : (
+                                        <span>Select a due date</span>
+                                      )}
+                                      <CalendarIcon className="ml-auto h-5 w-5 opacity-50" />
+                                    </Button>
+                                  </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                  <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    disabled={(date) =>
+                                      date < new Date(new Date().setHours(0, 0, 0, 0))
+                                    }
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <DialogFooter>
+                          <Button
+                            type="submit"
+                            disabled={isCreatingTask}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg h-12 text-base font-medium"
+                          >
+                            {isCreatingTask ? (
+                              <div className="flex items-center gap-2">
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                Creating...
+                              </div>
+                            ) : (
+                              "Create Task"
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </Form>
                   </DialogContent>
                 </Dialog>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {tasks.map((task) => (
                   <div
                     key={task.id}
-                    className="group flex items-start gap-3 rounded-lg border bg-white p-4 shadow-sm transition-all hover:shadow-md"
+                    className="group relative overflow-hidden rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md"
                   >
-                    <button
-                      onClick={() => toggleTaskStatus(task.id, task.status)}
-                      className="mt-1 flex-shrink-0"
-                    >
-                      {task.status === 'completed' ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      ) : (
-                        <Circle className="h-5 w-5 text-gray-400 hover:text-blue-500" />
-                      )}
-                    </button>
-                    <div className="flex-grow">
-                      <h3 className={cn(
-                        "text-sm font-medium",
-                        task.status === 'completed' && "text-muted-foreground line-through"
-                      )}>
-                        {task.title}
-                      </h3>
-                      {task.description && (
-                        <p className={cn(
-                          "mt-1 text-sm text-muted-foreground",
-                          task.status === 'completed' && "line-through"
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                    
+                    <div className="relative flex items-start gap-4">
+                      <button
+                        onClick={() => toggleTaskStatus(task.id, task.status)}
+                        className="mt-1 flex-shrink-0 transition-transform hover:scale-110"
+                      >
+                        {task.status === 'completed' ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <Circle className="h-5 w-5 text-gray-400 hover:text-blue-500" />
+                        )}
+                      </button>
+                      <div className="flex-grow min-w-0">
+                        <h3 className={cn(
+                          "text-base font-medium text-gray-900 truncate",
+                          task.status === 'completed' && "text-muted-foreground line-through"
                         )}>
-                          {task.description}
-                        </p>
-                      )}
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        Created {format(new Date(task.created_at), 'MMM d, yyyy')}
+                          {task.title}
+                        </h3>
+                        {task.description && (
+                          <p className={cn(
+                            "mt-1 text-sm text-muted-foreground line-clamp-2",
+                            task.status === 'completed' && "line-through"
+                          )}>
+                            {task.description}
+                          </p>
+                        )}
+                        <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
+                            <Clock className="h-3.5 w-3.5" />
+                            {format(new Date(task.created_at), 'MMM d, yyyy')}
+                          </div>
+                          {task.due_date && (
+                            <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
+                              <CalendarIcon className="h-3.5 w-3.5" />
+                              Due {format(new Date(task.due_date), 'MMM d, yyyy')}
+                            </div>
+                          )}
+                          <Badge variant="secondary" className={cn(
+                            "px-2 py-1 text-xs rounded-md shadow-sm backdrop-blur-sm",
+                            task.status === 'completed' 
+                              ? "bg-green-100/80 text-green-700 border-green-200/50" 
+                              : "bg-white/80 text-blue-700 border-blue-200/50"
+                          )}>
+                            {task.status}
+                          </Badge>
+                        </div>
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600"
+                            onClick={() => {
+                              if (window.confirm('Are you sure you want to delete this task?')) {
+                                deleteTask(task.id)
+                              }
+                            }}
+                          >
+                            Delete Task
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100"
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          className="text-red-600 focus:text-red-600"
-                          onClick={() => {
-                            if (window.confirm('Are you sure you want to delete this task?')) {
-                              deleteTask(task.id)
-                            }
-                          }}
-                        >
-                          Delete Task
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
                 ))}
 
                 {tasks.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
-                      <CheckCircle2 className="h-6 w-6 text-blue-600" />
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center bg-white/50">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100/50 text-blue-600">
+                      <CheckCircle2 className="h-6 w-6" />
                     </div>
                     <h3 className="mt-4 text-sm font-medium">No tasks yet</h3>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Create your first task to get started
+                    <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+                      Create your first task to start tracking progress on this project
                     </p>
                   </div>
                 )}
