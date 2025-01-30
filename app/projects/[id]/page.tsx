@@ -21,7 +21,9 @@ import {
   Circle,
   ArrowLeft,
   MoreVertical,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Pencil,
+  Trash2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
@@ -110,6 +112,7 @@ export default function ProjectDetailsPage() {
   const [isLoading, setIsLoading] = React.useState(true)
   const [isCreatingTask, setIsCreatingTask] = React.useState(false)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
+  const [editingTask, setEditingTask] = React.useState<Task | null>(null)
   const supabase = createClient()
   const router = useRouter()
   const form = useForm<TaskFormValues>({
@@ -231,6 +234,64 @@ export default function ProjectDetailsPage() {
       setIsCreatingTask(false)
     }
   }
+
+  const handleEditTask = async (values: TaskFormValues) => {
+    if (!editingTask) return;
+
+    try {
+      setIsCreatingTask(true);
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("User not found")
+
+      const updatedTask = {
+        title: values.title,
+        description: values.description || null,
+        due_date: values.due_date?.toISOString() || null,
+        updated_at: new Date().toISOString()
+      }
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .update(updatedTask)
+        .eq('id', editingTask.id)
+        .eq('created_by', user.id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setTasks(prev => prev.map(task => 
+        task.id === editingTask.id ? { ...task, ...updatedTask } : task
+      ))
+      
+      form.reset()
+      setIsDialogOpen(false)
+      setEditingTask(null)
+      toast.success("Task updated successfully")
+    } catch (error) {
+      console.error('Error updating task:', error)
+      toast.error("Failed to update task")
+    } finally {
+      setIsCreatingTask(false)
+    }
+  }
+
+  // Update the dialog title and form when editing
+  React.useEffect(() => {
+    if (editingTask) {
+      form.reset({
+        title: editingTask.title,
+        description: editingTask.description || "",
+        due_date: editingTask.due_date ? new Date(editingTask.due_date) : undefined,
+      })
+    } else {
+      form.reset({
+        title: "",
+        description: "",
+        due_date: undefined,
+      })
+    }
+  }, [editingTask, form])
 
   const toggleTaskStatus = async (taskId: string, currentStatus: string) => {
     try {
@@ -403,7 +464,10 @@ export default function ProjectDetailsPage() {
                   <h2 className="text-2xl font-semibold text-gray-900">Tasks</h2>
                   <p className="text-sm text-muted-foreground">Manage and track your project tasks</p>
                 </div>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                  setIsDialogOpen(open)
+                  if (!open) setEditingTask(null)
+                }}>
                   <DialogTrigger asChild>
                     <Button 
                       onClick={() => setIsDialogOpen(true)}
@@ -415,13 +479,16 @@ export default function ProjectDetailsPage() {
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
-                      <DialogTitle>Create New Task</DialogTitle>
+                      <DialogTitle>{editingTask ? 'Edit Task' : 'Create New Task'}</DialogTitle>
                       <DialogDescription>
-                        Break down your project into manageable tasks to track progress effectively.
+                        {editingTask 
+                          ? 'Update your task details below.'
+                          : 'Break down your project into manageable tasks to track progress effectively.'
+                        }
                       </DialogDescription>
                     </DialogHeader>
                     <Form {...form}>
-                      <form onSubmit={form.handleSubmit(handleCreateTask)} className="space-y-4 py-4">
+                      <form onSubmit={form.handleSubmit(editingTask ? handleEditTask : handleCreateTask)} className="space-y-4 py-4">
                         <FormField
                           control={form.control}
                           name="title"
@@ -462,37 +529,40 @@ export default function ProjectDetailsPage() {
                           render={({ field }) => (
                             <FormItem className="flex flex-col">
                               <FormLabel className="text-sm font-medium">Due Date</FormLabel>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <FormControl>
-                                    <Button
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full h-12 pl-3 text-left font-normal text-base transition-colors hover:border-blue-200 focus:border-blue-400",
-                                        !field.value && "text-muted-foreground"
-                                      )}
-                                    >
-                                      {field.value ? (
-                                        format(field.value, "PPP")
-                                      ) : (
-                                        <span>Select a due date</span>
-                                      )}
-                                      <CalendarIcon className="ml-auto h-5 w-5 opacity-50" />
-                                    </Button>
-                                  </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                  <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    disabled={(date) =>
-                                      date < new Date(new Date().setHours(0, 0, 0, 0))
-                                    }
-                                    initialFocus
-                                  />
-                                </PopoverContent>
-                              </Popover>
+                              <div className="relative">
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <FormControl>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        className={cn(
+                                          "w-full h-12 pl-3 text-left font-normal text-base transition-colors hover:border-blue-200 focus:border-blue-400",
+                                          !field.value && "text-muted-foreground"
+                                        )}
+                                      >
+                                        {field.value ? (
+                                          format(field.value, "PPP")
+                                        ) : (
+                                          <span>Select a due date</span>
+                                        )}
+                                        <CalendarIcon className="ml-auto h-5 w-5 opacity-50" />
+                                      </Button>
+                                    </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                      mode="single"
+                                      selected={field.value}
+                                      onSelect={field.onChange}
+                                      disabled={(date) =>
+                                        date < new Date(new Date().setHours(0, 0, 0, 0))
+                                      }
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -506,10 +576,10 @@ export default function ProjectDetailsPage() {
                             {isCreatingTask ? (
                               <div className="flex items-center gap-2">
                                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                Creating...
+                                {editingTask ? 'Updating...' : 'Creating...'}
                               </div>
                             ) : (
-                              "Create Task"
+                              editingTask ? 'Update Task' : 'Create Task'
                             )}
                           </Button>
                         </DialogFooter>
@@ -527,6 +597,35 @@ export default function ProjectDetailsPage() {
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                     
+                    {/* Action Buttons */}
+                    <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <button
+                        type="button"
+                        className="flex items-center justify-center h-8 w-8 rounded-full bg-white/80 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingTask(task);
+                          setIsDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4 text-blue-600" />
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center justify-center h-8 w-8 rounded-full bg-white/80 hover:bg-red-50 transition-colors border border-transparent hover:border-red-100"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (window.confirm('Are you sure you want to delete this task?')) {
+                            deleteTask(task.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </button>
+                    </div>
+
                     <div className="relative flex items-start gap-4">
                       <button
                         onClick={() => toggleTaskStatus(task.id, task.status)}
@@ -574,29 +673,6 @@ export default function ProjectDetailsPage() {
                           </Badge>
                         </div>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem
-                            className="text-red-600 focus:text-red-600"
-                            onClick={() => {
-                              if (window.confirm('Are you sure you want to delete this task?')) {
-                                deleteTask(task.id)
-                              }
-                            }}
-                          >
-                            Delete Task
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </div>
                 ))}

@@ -97,6 +97,8 @@ body {
   --rdp-outline: 2px solid var(--rdp-accent-color);
   --rdp-outline-selected: 2px solid var(--rdp-accent-color);
   margin: 0;
+  position: relative;
+  z-index: 99999;
 }
 
 .rdp-button {
@@ -199,5 +201,5 @@ body {
 }
 
 [data-radix-popper-content-wrapper] {
-  z-index: 50 !important;
+  z-index: 99999 !important;
 }
