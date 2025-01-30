@@ -399,70 +399,129 @@ export default function ProjectDetailsPage() {
         <main className="flex flex-col items-center justify-start py-8 px-4">
           <div className="w-full max-w-5xl space-y-6">
             {/* Project Header */}
-            <div className="relative overflow-hidden rounded-2xl border bg-white shadow-sm">
-              {/* Background Pattern */}
-              <div className="absolute inset-0 opacity-5">
-                <div className="absolute inset-0" style={{
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                }} />
-              </div>
-              
-              {/* Content */}
-              <div className="relative p-8">
-                <div className="flex items-start justify-between gap-8">
-                  <div className="space-y-4 flex-grow">
-                    <div className="space-y-2">
-                      <h1 className="text-3xl font-bold tracking-tight text-gray-900">{project.title}</h1>
-                      <p className="text-base text-muted-foreground max-w-2xl leading-relaxed">{project.description}</p>
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-4">
-                      <Badge variant="secondary" className={cn("px-3 py-1 text-sm font-medium rounded-full", getStatusColor(project.status))}>
-                        {project.status.replace('-', ' ')}
-                      </Badge>
-                      <Badge variant="secondary" className={cn("px-3 py-1 text-sm font-medium rounded-full", getPriorityColor(project.priority))}>
-                        {project.priority}
-                      </Badge>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground bg-gray-50 px-3 py-1 rounded-full">
-                        <CalendarDays className="h-4 w-4" />
-                        <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+              {/* Project Title & Description */}
+              <div className="col-span-1 md:col-span-2 xl:col-span-3 bg-white rounded-2xl border shadow-sm p-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                        <FolderKanban className="h-5 w-5 text-blue-600" />
                       </div>
+                      <h1 className="text-2xl font-bold text-gray-900">{project.title}</h1>
                     </div>
+                    <p className="text-sm text-muted-foreground max-w-2xl">{project.description}</p>
+                  </div>
+                  {project.attachments?.[0] && (
+                    <img
+                      src={project.attachments[0].url}
+                      alt={project.attachments[0].name}
+                      className="hidden md:block h-32 w-32 rounded-lg object-cover ring-2 ring-white shadow-md hover:scale-105 transition-transform cursor-pointer"
+                    />
+                  )}
+                </div>
+              </div>
 
-                    {project.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-2">
+              {/* Project Stats */}
+              <div className="col-span-1 grid grid-cols-2 xl:grid-cols-1 gap-4">
+                {/* Status Card */}
+                <div className="bg-white rounded-2xl border shadow-sm p-4">
+                  <div className="flex flex-col h-full">
+                    <div className="text-sm font-medium text-muted-foreground mb-2">Status</div>
+                    <div className="flex items-center gap-2 mt-auto">
+                      <div className={cn(
+                        "h-2.5 w-2.5 rounded-full",
+                        project.status === 'todo' && "bg-gray-400",
+                        project.status === 'in-progress' && "bg-blue-500",
+                        project.status === 'done' && "bg-green-500"
+                      )} />
+                      <span className="text-sm font-medium capitalize">{project.status.replace('-', ' ')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Priority Card */}
+                <div className="bg-white rounded-2xl border shadow-sm p-4">
+                  <div className="flex flex-col h-full">
+                    <div className="text-sm font-medium text-muted-foreground mb-2">Priority</div>
+                    <div className="flex items-center gap-2 mt-auto">
+                      <div className={cn(
+                        "h-2.5 w-2.5 rounded-full",
+                        project.priority === 'low' && "bg-green-500",
+                        project.priority === 'medium' && "bg-yellow-500",
+                        project.priority === 'high' && "bg-red-500"
+                      )} />
+                      <span className="text-sm font-medium capitalize">{project.priority}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Project Details */}
+              <div className="col-span-1 md:col-span-2 xl:col-span-4 bg-white rounded-2xl border shadow-sm p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Due Date */}
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <CalendarDays className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Due Date</div>
+                      <div className="text-sm font-medium">{format(new Date(project.due_date), 'MMM d, yyyy')}</div>
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <Tag className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-grow min-w-0">
+                      <div className="text-sm font-medium text-muted-foreground mb-1">Tags</div>
+                      <div className="flex flex-wrap gap-1.5">
                         {project.tags.map((tag, index) => (
                           <Badge
                             key={index}
                             variant="secondary"
-                            className="bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 text-sm font-medium rounded-full"
+                            className="bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-0.5 text-xs font-medium rounded-full"
                           >
                             {tag}
                           </Badge>
                         ))}
                       </div>
-                    )}
+                    </div>
                   </div>
 
-                  {project.attachments?.[0] && (
-                    <div className="hidden sm:block flex-shrink-0">
-                      <img
-                        src={project.attachments[0].url}
-                        alt={project.attachments[0].name}
-                        className="h-40 w-40 rounded-xl object-cover ring-2 ring-white shadow-lg"
-                      />
+                  {/* Attachments */}
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <Paperclip className="h-5 w-5 text-blue-600" />
                     </div>
-                  )}
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Attachments</div>
+                      <div className="text-sm font-medium">
+                        {project.attachments && project.attachments.length > 0 
+                          ? `${project.attachments.length} ${project.attachments.length === 1 ? 'file' : 'files'}`
+                          : 'No files'
+                        }
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Tasks Section */}
-            <div className="space-y-6">
+            <div className="bg-white rounded-2xl border shadow-sm p-6 space-y-6">
               <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <h2 className="text-2xl font-semibold text-gray-900">Tasks</h2>
-                  <p className="text-sm text-muted-foreground">Manage and track your project tasks</p>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <CheckCircle2 className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
+                    <p className="text-sm text-muted-foreground">Manage and track your project tasks</p>
+                  </div>
                 </div>
                 <Dialog open={isDialogOpen} onOpenChange={(open) => {
                   setIsDialogOpen(open)
@@ -593,7 +652,7 @@ export default function ProjectDetailsPage() {
                 {tasks.map((task) => (
                   <div
                     key={task.id}
-                    className="group relative overflow-hidden rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md"
+                    className="group relative overflow-hidden rounded-xl border bg-white/50 p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                     

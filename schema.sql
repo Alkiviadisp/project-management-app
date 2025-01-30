@@ -358,7 +358,7 @@ CREATE TABLE IF NOT EXISTS public.projects (
   title TEXT NOT NULL,
   description TEXT,
   created_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('not_started', 'in_progress', 'completed')),
+  status project_status NOT NULL DEFAULT 'todo'::project_status,
   due_date TIMESTAMP WITH TIME ZONE NOT NULL,
   priority TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high')),
   tags TEXT[] DEFAULT ARRAY[]::TEXT[],

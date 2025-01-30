@@ -240,22 +240,22 @@ export default function ProjectsPage() {
                         {firstAttachment ? (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <img
-                                src={firstAttachment.url}
-                                alt={firstAttachment.name}
+                                <img
+                                  src={firstAttachment.url}
+                                  alt={firstAttachment.name}
                                 className="h-full w-full object-cover transition-transform duration-300 hover:scale-105 cursor-zoom-in"
-                              />
+                                />
                             </DialogTrigger>
                             <DialogContent className="max-w-3xl">
                               <DialogHeader>
                                 <DialogTitle>{project.title}</DialogTitle>
                                 <DialogDescription>Project Image</DialogDescription>
                               </DialogHeader>
-                              <img
+                                    <img
                                 src={firstAttachment.url}
                                 alt={firstAttachment.name}
                                 className="w-full rounded-lg"
-                              />
+                                    />
                             </DialogContent>
                           </Dialog>
                         ) : (
@@ -279,40 +279,42 @@ export default function ProjectsPage() {
                               {project.title}
                             </h3>
                             <p className="text-xs text-muted-foreground line-clamp-2">
-                              {project.description}
-                            </p>
-                          </div>
+                            {project.description}
+                          </p>
+                        </div>
 
                           <div className="flex flex-wrap gap-1.5">
                             <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(project.status))}>
-                              {project.status.replace('-', ' ')}
-                            </Badge>
+                            {project.status.replace('-', ' ')}
+                          </Badge>
                             <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getPriorityColor(project.priority))}>
-                              {project.priority}
-                            </Badge>
-                          </div>
+                            {project.priority}
+                          </Badge>
+                        </div>
 
                           <div className="space-y-2 pt-1">
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                               <CalendarDays className="h-3 w-3" />
-                              <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
-                            </div>
-                            {project.tags.length > 0 && (
+                            <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                          </div>
+                          {project.tags.length > 0 && (
                               <div className="flex items-center gap-1.5">
                                 <Tag className="h-3 w-3 text-muted-foreground" />
-                                <div className="flex flex-wrap gap-1">
-                                  {project.tags.map((tag, index) => (
-                                    <Badge
-                                      key={index}
-                                      variant="secondary"
+                              <div className="flex flex-wrap gap-1">
+                                {project.tags.map((tag, index) => (
+                                  <Badge
+                                    key={index}
+                                    variant="secondary"
                                       className={cn("px-1.5 py-0 text-xs", colors.bg, colors.text)}
-                                    >
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+
                               </div>
-                            )}
+
+                            </div>
+                          )}
                             {project.attachments.length > 1 && (
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <Paperclip className="h-3 w-3" />
