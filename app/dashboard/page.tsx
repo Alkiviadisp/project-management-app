@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sidebar"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
-import { format } from "date-fns"
+import { format, subDays } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Pie, PieChart } from "recharts"
@@ -25,6 +25,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
 
 // Project colors for progress bars
 const projectColors = [
@@ -83,6 +84,11 @@ const calculateStats = (projects: Project[]) => {
       icon: <CalendarCheck className="h-4 w-4 text-muted-foreground" />,
     },
     {
+      name: "Team Members",
+      value: "5",
+      icon: <Users className="h-4 w-4 text-muted-foreground" />,
+    },
+    {
       name: "Completed Projects",
       value: completedProjects.toString(),
       icon: <ListTodo className="h-4 w-4 text-muted-foreground" />,
@@ -109,6 +115,14 @@ const priorityChartConfig = {
   },
 } satisfies ChartConfig
 
+// Add this before the DashboardPage component
+const projectProgressConfig = {
+  projects: {
+    label: "Projects",
+    color: "hsl(var(--chart-1))",
+  },
+} satisfies ChartConfig
+
 export default function DashboardPage() {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
@@ -130,6 +144,28 @@ export default function DashboardPage() {
       { priority: "medium", count: priorityCounts.medium || 0, fill: "var(--color-medium)" },
       { priority: "high", count: priorityCounts.high || 0, fill: "var(--color-high)" },
     ]
+  }, [projects])
+
+  // Add this after the priorityData calculation
+  const projectProgressData = React.useMemo(() => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = subDays(new Date(), i)
+      date.setHours(0, 0, 0, 0)
+      return date
+    }).reverse()
+
+    return last7Days.map(date => {
+      const dayProjects = projects.filter(project => {
+        const projectDate = new Date(project.created_at)
+        projectDate.setHours(0, 0, 0, 0)
+        return projectDate.getTime() === date.getTime()
+      })
+
+      return {
+        date: format(date, 'MMM dd'),
+        projects: dayProjects.length,
+      }
+    })
   }, [projects])
 
   React.useEffect(() => {
@@ -203,10 +239,10 @@ export default function DashboardPage() {
 
   const ProjectCard = ({ project }: { project: Project }) => (
     <Card key={project.id} className="group bg-white transition-all hover:shadow-md">
-      <CardHeader className="p-4 pb-2">
+      <CardHeader className="p-3 pb-2">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-grow">
-            <h3 className="font-semibold line-clamp-1">{project.title}</h3>
+            <h3 className="font-semibold line-clamp-1 text-sm">{project.title}</h3>
             <Progress 
               value={getProjectProgress(project.status)} 
               indicatorColor={getPriorityColor(project.priority)}
@@ -218,39 +254,38 @@ export default function DashboardPage() {
               <img
                 src={project.attachments[0].url}
                 alt={project.attachments[0].name}
-                className="h-12 w-12 rounded-lg object-cover ring-1 ring-gray-200"
+                className="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200"
               />
             </div>
           ) : (
             <div className={cn(
-              "h-12 w-12 rounded-lg flex items-center justify-center bg-blue-100",
+              "h-10 w-10 rounded-lg flex items-center justify-center bg-blue-100",
               project.color
             )}>
-              <FolderKanban className="h-6 w-6 text-blue-600" />
+              <FolderKanban className="h-5 w-5 text-blue-600" />
             </div>
           )}
         </div>
       </CardHeader>
-      <CardContent className="p-4 pt-2">
-        <p className="text-sm text-muted-foreground line-clamp-2">{project.description}</p>
-        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-          <Clock className="h-3.5 w-3.5" />
-          <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+      <CardContent className="p-3 pt-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" />
+            <span>Due {format(new Date(project.due_date), 'MMM d')}</span>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-7 gap-1 px-2 opacity-0 group-hover:opacity-100"
+            asChild
+          >
+            <Link href={`/projects/${project.id}`}>
+              View
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
         </div>
       </CardContent>
-      <CardFooter className="p-4 pt-0">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className="ml-auto gap-2 opacity-0 group-hover:opacity-100"
-          asChild
-        >
-          <Link href={`/projects/${project.id}`}>
-            View Details
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
-      </CardFooter>
     </Card>
   )
 
@@ -277,7 +312,7 @@ export default function DashboardPage() {
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-4 h-6" />
             <div>
-              <h1 className="text-xl font-semibold">Good morning, {userNickname}</h1>
+              <h1 className="text-xl font-semibold">Hello, {userNickname}</h1>
               <p className="text-sm text-muted-foreground">Here's what's happening with your projects today</p>
             </div>
           </div>
@@ -285,20 +320,37 @@ export default function DashboardPage() {
 
         <div className="flex flex-1 flex-col gap-6 p-6">
           {/* Statistics Section */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {stats.map((stat, index) => (
-              <Card key={index}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {stat.name}
-                  </CardTitle>
-                  {stat.icon}
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stat.value}</div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {stats.map((stat, index) => {
+              const isClickable = stat.name === "Active Projects" || stat.name === "Tasks Due Today"
+              const href = stat.name === "Active Projects" ? "/projects" : stat.name === "Tasks Due Today" ? "/tasks" : undefined
+              
+              const cardContent = (
+                <>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      {stat.name}
+                    </CardTitle>
+                    {stat.icon}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{stat.value}</div>
+                  </CardContent>
+                </>
+              )
+
+              return isClickable ? (
+                <Link key={index} href={href!}>
+                  <Card className="transition-all hover:shadow-md cursor-pointer">
+                    {cardContent}
+                  </Card>
+                </Link>
+              ) : (
+                <Card key={index}>
+                  {cardContent}
+                </Card>
+              )
+            })}
           </div>
 
           {/* Charts Section */}
@@ -306,13 +358,38 @@ export default function DashboardPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Project Progress</CardTitle>
+                <CardDescription>Projects created in the last 7 days</CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Project Progress Chart will go here */}
-                <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                  Project Progress Chart
-                </div>
+                <ChartContainer 
+                  config={projectProgressConfig}
+                  className="mx-auto h-[180px]"
+                >
+                  <BarChart data={projectProgressData}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      tickMargin={10}
+                      axisLine={false}
+                    />
+                    <ChartTooltip
+                      cursor={false}
+                      content={<ChartTooltipContent hideLabel />}
+                    />
+                    <Bar 
+                      dataKey="projects" 
+                      fill="var(--color-projects)" 
+                      radius={[4, 4, 0, 0]} 
+                    />
+                  </BarChart>
+                </ChartContainer>
               </CardContent>
+              <CardFooter className="flex-col gap-2 text-sm">
+                <div className="leading-none text-muted-foreground">
+                  Total projects created in the last 7 days: {projectProgressData.reduce((sum, day) => sum + day.projects, 0)}
+                </div>
+              </CardFooter>
             </Card>
             <Card>
               <CardHeader>
@@ -322,7 +399,7 @@ export default function DashboardPage() {
               <CardContent>
                 <ChartContainer
                   config={priorityChartConfig}
-                  className="mx-auto aspect-square max-h-[250px]"
+                  className="mx-auto h-[180px]"
                 >
                   <PieChart>
                     <ChartTooltip
