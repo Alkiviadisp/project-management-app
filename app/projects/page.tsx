@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 type Project = {
   id: string
@@ -49,6 +49,8 @@ export default function ProjectsPage() {
   const [isLoading, setIsLoading] = React.useState(true)
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const filterParam = searchParams.get('filter')
 
   React.useEffect(() => {
     async function fetchProjects() {
@@ -56,23 +58,34 @@ export default function ProjectsPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error("User not found")
 
-        const { data, error } = await supabase
+        let query = supabase
           .from('projects')
           .select('*')
-          .order('created_at', { ascending: false })
+          .eq('created_by', user.id)
+
+        // Apply status filter based on URL parameter
+        if (filterParam === 'active') {
+          query = query.in('status', ['todo', 'in-progress'])
+        } else if (filterParam === 'completed') {
+          query = query.eq('status', 'done')
+        }
+
+        query = query.order('created_at', { ascending: false })
+
+        const { data, error } = await query
 
         if (error) throw error
-
         setProjects(data || [])
       } catch (error) {
         console.error('Error fetching projects:', error)
+        toast.error("Failed to load projects")
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchProjects()
-  }, [])
+  }, [filterParam])
 
   const getStatusColor = (status: Project['status']) => {
     switch (status) {

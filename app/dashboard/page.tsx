@@ -330,7 +330,7 @@ export default function DashboardPage() {
   return (
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
-      <SidebarInset>
+      <SidebarInset className="bg-white">
         {/* Header */}
         <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-white/60">
           <div className="flex items-center gap-2">
@@ -347,8 +347,12 @@ export default function DashboardPage() {
           {/* Statistics Section */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {stats.map((stat, index) => {
-              const isClickable = stat.name === "Active Projects" || stat.name === "Tasks Due Today"
-              const href = stat.name === "Active Projects" ? "/projects" : stat.name === "Tasks Due Today" ? "/tasks" : undefined
+              const isClickable = stat.name === "Active Projects" || stat.name === "Completed Projects"
+              const href = stat.name === "Active Projects" 
+                ? "/projects?filter=active" 
+                : stat.name === "Completed Projects" 
+                  ? "/projects?filter=completed" 
+                  : undefined
               
               const cardContent = (
                 <>
@@ -365,8 +369,8 @@ export default function DashboardPage() {
               )
 
               return isClickable ? (
-                <Link key={index} href={href!}>
-                  <Card className="transition-all hover:shadow-md cursor-pointer">
+                <Link key={index} href={href!} className="transition-all hover:scale-105">
+                  <Card className="hover:border-blue-200 hover:shadow-md">
                     {cardContent}
                   </Card>
                 </Link>
