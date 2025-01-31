@@ -13,7 +13,7 @@ BEGIN
     END IF;
 END$$;
 
--- Create tables
+-- Create profiles table
 create table if not exists profiles (
     id uuid references auth.users on delete cascade primary key,
     nickname text not null,
@@ -22,6 +22,64 @@ create table if not exists profiles (
     created_at timestamp with time zone default timezone('utc'::text, now()) not null,
     updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Create projects table
+create table if not exists projects (
+    id uuid default uuid_generate_v4() primary key,
+    title text not null,
+    description text,
+    created_by uuid references profiles(id) on delete cascade not null,
+    status project_status default 'todo'::project_status,
+    due_date timestamptz,
+    priority text check (priority in ('low', 'medium', 'high')),
+    tags text[] default array[]::text[],
+    attachments jsonb default '[]'::jsonb,
+    color text,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now(),
+    constraint proper_title check (char_length(title) >= 3)
+);
+
+-- Create tasks table
+create table if not exists tasks (
+    id uuid default uuid_generate_v4() primary key,
+    title text not null,
+    description text,
+    status project_status default 'todo'::project_status not null,
+    due_date timestamptz,
+    project_id uuid references projects(id) on delete cascade not null,
+    assigned_to uuid references profiles(id) on delete set null,
+    created_by uuid references profiles(id) on delete cascade not null,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now(),
+    constraint proper_title check (char_length(title) >= 3)
+);
+
+-- Create project_members table
+create table if not exists project_members (
+    project_id uuid references projects(id) on delete cascade,
+    profile_id uuid references profiles(id) on delete cascade,
+    created_at timestamptz default now(),
+    primary key (project_id, profile_id)
+);
+
+-- Create comments table
+create table if not exists comments (
+    id uuid default uuid_generate_v4() primary key,
+    content text not null,
+    task_id uuid references tasks(id) on delete cascade not null,
+    created_by uuid references profiles(id) on delete cascade not null,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now(),
+    constraint proper_content check (char_length(content) >= 1)
+);
+
+-- Enable Row Level Security
+alter table profiles enable row level security;
+alter table projects enable row level security;
+alter table tasks enable row level security;
+alter table project_members enable row level security;
+alter table comments enable row level security;
 
 -- Set up Row Level Security (RLS)
 alter table profiles enable row level security;
@@ -116,257 +174,6 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
-create table if not exists projects (
-    id uuid default uuid_generate_v4() primary key,
-    created_at timestamptz default now(),
-    updated_at timestamptz default now(),
-    title text not null,
-    description text,
-    created_by uuid references profiles(id) on delete cascade not null,
-    status project_status default 'todo'::project_status,
-    constraint proper_title check (char_length(title) >= 3)
-);
-
-create table if not exists tasks (
-    id uuid default uuid_generate_v4() primary key,
-    created_at timestamptz default now(),
-    updated_at timestamptz default now(),
-    title text not null,
-    description text,
-    project_id uuid references projects(id) on delete cascade not null,
-    assignee_id uuid references profiles(id) on delete set null,
-    status project_status default 'todo'::project_status,
-    constraint proper_title check (char_length(title) >= 3)
-);
-
-create table if not exists project_members (
-    project_id uuid references projects(id) on delete cascade,
-    profile_id uuid references profiles(id) on delete cascade,
-    created_at timestamptz default now(),
-    primary key (project_id, profile_id)
-);
-
-create table if not exists comments (
-    id uuid default uuid_generate_v4() primary key,
-    created_at timestamptz default now(),
-    updated_at timestamptz default now(),
-    content text not null,
-    task_id uuid references tasks(id) on delete cascade not null,
-    created_by uuid references profiles(id) on delete cascade not null,
-    constraint proper_content check (char_length(content) >= 1)
-);
-
--- Enable Row Level Security
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE project_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
-
--- Set up RLS policies
-DO $$
-BEGIN
-    -- Projects policies
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'projects' 
-        AND policyname = 'Project members can view projects'
-    ) THEN
-        CREATE POLICY "Project members can view projects"
-        ON projects FOR SELECT
-        USING (
-            auth.uid() IN (
-                SELECT profile_id
-                FROM project_members
-                WHERE project_id = id
-            )
-            OR auth.uid() = created_by
-        );
-    END IF;
-
-    -- Add policies for project creation
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'projects' 
-        AND policyname = 'Users can create projects'
-    ) THEN
-        CREATE POLICY "Users can create projects"
-        ON projects FOR INSERT
-        WITH CHECK (auth.uid() IS NOT NULL);
-    END IF;
-
-    -- Add policies for project updates
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'projects' 
-        AND policyname = 'Project members can update projects'
-    ) THEN
-        CREATE POLICY "Project members can update projects"
-        ON projects FOR UPDATE
-        USING (
-            auth.uid() IN (
-                SELECT profile_id
-                FROM project_members
-                WHERE project_id = id
-            )
-            OR auth.uid() = created_by
-        );
-    END IF;
-
-    -- Add policy for project deletion
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'projects' 
-        AND policyname = 'Only owner can delete projects'
-    ) THEN
-        CREATE POLICY "Only owner can delete projects"
-        ON projects FOR DELETE
-        USING (auth.uid() = created_by);
-    END IF;
-
-    -- Tasks policies
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'tasks' 
-        AND policyname = 'Project members can view tasks'
-    ) THEN
-        CREATE POLICY "Project members can view tasks"
-        ON tasks FOR SELECT
-        USING (
-            auth.uid() IN (
-                SELECT profile_id
-                FROM project_members
-                WHERE project_id = tasks.project_id
-            )
-            OR auth.uid() = (
-                SELECT created_by
-                FROM projects
-                WHERE id = tasks.project_id
-            )
-        );
-    END IF;
-
-    -- Add policy for task creation
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'tasks' 
-        AND policyname = 'Project members can create tasks'
-    ) THEN
-        CREATE POLICY "Project members can create tasks"
-        ON tasks FOR INSERT
-        WITH CHECK (auth.uid() IS NOT NULL);
-    END IF;
-
-    -- Add policy for task updates
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'tasks' 
-        AND policyname = 'Project members can update tasks'
-    ) THEN
-        CREATE POLICY "Project members can update tasks"
-        ON tasks FOR UPDATE
-        USING (
-            auth.uid() IN (
-                SELECT profile_id
-                FROM project_members
-                WHERE project_id = project_id
-            )
-            OR auth.uid() = (
-                SELECT created_by
-                FROM projects
-                WHERE id = project_id
-            )
-        );
-    END IF;
-
-    -- Comments policies
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'comments' 
-        AND policyname = 'Project members can view comments'
-    ) THEN
-        CREATE POLICY "Project members can view comments"
-        ON comments FOR SELECT
-        USING (
-            auth.uid() IN (
-                SELECT profile_id
-                FROM project_members pm
-                JOIN tasks t ON t.project_id = pm.project_id
-                WHERE t.id = comments.task_id
-            )
-            OR auth.uid() = (
-                SELECT p.created_by
-                FROM tasks t
-                JOIN projects p ON p.id = t.project_id
-                WHERE t.id = comments.task_id
-            )
-        );
-    END IF;
-
-    -- Add policy for comment creation
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'comments' 
-        AND policyname = 'Project members can create comments'
-    ) THEN
-        CREATE POLICY "Project members can create comments"
-        ON comments FOR INSERT
-        WITH CHECK (auth.uid() IS NOT NULL);
-    END IF;
-
-    -- Add policy for comment updates
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'comments' 
-        AND policyname = 'Authors can update their comments'
-    ) THEN
-        CREATE POLICY "Authors can update their comments"
-        ON comments FOR UPDATE
-        USING (auth.uid() = created_by);
-    END IF;
-
-    -- Add policy for comment deletion
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'comments' 
-        AND policyname = 'Authors can delete their comments'
-    ) THEN
-        CREATE POLICY "Authors can delete their comments"
-        ON comments FOR DELETE
-        USING (auth.uid() = created_by);
-    END IF;
-END$$;
-
--- Final schema cache refresh
-NOTIFY pgrst, 'reload schema';
-
--- Create necessary extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Create tables
-CREATE TABLE IF NOT EXISTS public.users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT,
-  avatar_url TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS public.projects (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  title TEXT NOT NULL,
-  description TEXT,
-  created_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  status project_status NOT NULL DEFAULT 'todo'::project_status,
-  due_date TIMESTAMP WITH TIME ZONE NOT NULL,
-  priority TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high')),
-  tags TEXT[] DEFAULT ARRAY[]::TEXT[],
-  attachments JSONB DEFAULT '[]'::jsonb,
-  color TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
 
 -- Create storage bucket for project attachments
 INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
@@ -470,4 +277,25 @@ CREATE POLICY "Give public access to view files" ON storage.objects
 -- Add comments for documentation
 COMMENT ON TABLE public.projects IS 'Stores project information';
 COMMENT ON COLUMN public.projects.attachments IS 'Array of file attachments with structure: [{url: string, name: string, type: string, size: number, path: string}]';
-COMMENT ON COLUMN public.projects.color IS 'Tailwind CSS color class for the project card'; 
+COMMENT ON COLUMN public.projects.color IS 'Tailwind CSS color class for the project card';
+
+-- Refresh schema cache
+NOTIFY pgrst, 'reload schema';
+
+-- Create function to update task status
+CREATE OR REPLACE FUNCTION update_task_status(
+  p_task_id UUID,
+  p_user_id UUID,
+  p_status TEXT
+)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE tasks
+  SET 
+    status = p_status::project_status,
+    updated_at = NOW()
+  WHERE 
+    id = p_task_id 
+    AND created_by = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER; 

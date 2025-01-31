@@ -64,6 +64,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import Link from "next/link"
+
+type ProjectStatus = 'todo' | 'in-progress' | 'done'
 
 type Project = {
   id: string
@@ -89,7 +92,7 @@ type Task = {
   title: string
   description: string | null
   due_date: string | null
-  status: "pending" | "completed"
+  status: ProjectStatus
   project_id: string
   created_by: string
   created_at: string
@@ -214,7 +217,7 @@ export default function ProjectDetailsPage() {
           title: values.title,
           description: values.description,
           due_date: values.due_date?.toISOString() || null,
-          status: 'pending',
+          status: 'todo',
           project_id: projectId,
           created_by: user.id
         })
@@ -293,32 +296,42 @@ export default function ProjectDetailsPage() {
     }
   }, [editingTask, form])
 
-  const toggleTaskStatus = async (taskId: string, currentStatus: string) => {
+  const toggleTaskStatus = async (taskId: string, currentStatus: Project['status']) => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("User not found")
 
-      const newStatus = currentStatus === 'pending' ? 'completed' : 'pending'
-      const { error } = await supabase
-        .from('tasks')
-        .update({ 
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', taskId)
-        .eq('created_by', user.id)
+      // Cycle through statuses: todo -> in-progress -> done -> todo
+      const newStatus: Project['status'] = (() => {
+        switch (currentStatus) {
+          case 'todo':
+            return 'in-progress'
+          case 'in-progress':
+            return 'done'
+          case 'done':
+          default:
+            return 'todo'
+        }
+      })()
 
-      if (error) {
-        console.error('Error updating task status:', error)
-        throw error
-      }
+      // Update task using the stored procedure
+      const { error: updateError } = await supabase
+        .rpc('update_task_status', {
+          p_task_id: taskId,
+          p_user_id: user.id,
+          p_status: newStatus
+        })
+
+      if (updateError) throw updateError
 
       setTasks(prev => prev.map(task => 
         task.id === taskId ? { ...task, status: newStatus } : task
       ))
-      toast.success(`Task marked as ${newStatus}`)
+
+      const statusDisplay = newStatus === 'in-progress' ? 'in progress' : newStatus
+      toast.success(`Task marked as ${statusDisplay}`)
     } catch (error) {
-      console.error('Error updating task:', error)
+      console.error('Error updating task status:', error)
       toast.error("Failed to update task status")
     }
   }
@@ -652,37 +665,39 @@ export default function ProjectDetailsPage() {
                 {tasks.map((task) => (
                   <div
                     key={task.id}
-                    className="group relative overflow-hidden rounded-xl border bg-white/50 p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100"
+                    className={cn(
+                      "group relative overflow-hidden rounded-xl border p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100",
+                      task.status === 'in-progress' && "bg-green-50",
+                      task.status === 'done' && "bg-red-50"
+                    )}
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                     
                     {/* Action Buttons */}
                     <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      <button
-                        type="button"
-                        className="flex items-center justify-center h-8 w-8 rounded-full bg-white/80 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setEditingTask(task);
-                          setIsDialogOpen(true);
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingTask(task)
+                          setIsDialogOpen(true)
                         }}
+                        className="h-8 w-8 bg-white/80 hover:bg-blue-50 border border-transparent hover:border-blue-100"
                       >
                         <Pencil className="h-4 w-4 text-blue-600" />
-                      </button>
-                      <button
-                        type="button"
-                        className="flex items-center justify-center h-8 w-8 rounded-full bg-white/80 hover:bg-red-50 transition-colors border border-transparent hover:border-red-100"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
                           if (window.confirm('Are you sure you want to delete this task?')) {
-                            deleteTask(task.id);
+                            deleteTask(task.id)
                           }
                         }}
+                        className="h-8 w-8 bg-white/80 hover:bg-red-50 border border-transparent hover:border-red-100"
                       >
                         <Trash2 className="h-4 w-4 text-red-600" />
-                      </button>
+                      </Button>
                     </div>
 
                     <div className="relative flex items-start gap-4">
@@ -690,45 +705,58 @@ export default function ProjectDetailsPage() {
                         onClick={() => toggleTaskStatus(task.id, task.status)}
                         className="mt-1 flex-shrink-0 transition-transform hover:scale-110"
                       >
-                        {task.status === 'completed' ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        {task.status === 'done' ? (
+                          <CheckCircle2 className="h-5 w-5 text-red-500" />
+                        ) : task.status === 'in-progress' ? (
+                          <Circle className="h-5 w-5 text-green-500" />
                         ) : (
                           <Circle className="h-5 w-5 text-gray-400 hover:text-blue-500" />
                         )}
                       </button>
                       <div className="flex-grow min-w-0">
                         <h3 className={cn(
-                          "text-base font-medium text-gray-900 truncate",
-                          task.status === 'completed' && "text-muted-foreground line-through"
+                          "text-base font-medium truncate",
+                          task.status === 'done' && "text-red-700 line-through",
+                          task.status === 'in-progress' && "text-green-700"
                         )}>
                           {task.title}
                         </h3>
                         {task.description && (
                           <p className={cn(
                             "mt-1 text-sm text-muted-foreground line-clamp-2",
-                            task.status === 'completed' && "line-through"
+                            task.status === 'done' && "text-red-600/80 line-through",
+                            task.status === 'in-progress' && "text-green-600/80"
                           )}>
                             {task.description}
                           </p>
                         )}
-                        <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
-                            <Clock className="h-3.5 w-3.5" />
-                            {format(new Date(task.created_at), 'MMM d, yyyy')}
-                          </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                           {task.due_date && (
-                            <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
-                              <CalendarIcon className="h-3.5 w-3.5" />
+                            <div className={cn(
+                              "flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md",
+                              task.status === 'done' && "text-red-600/80",
+                              task.status === 'in-progress' && "text-green-600/80"
+                            )}>
+                              <CalendarDays className="h-3.5 w-3.5" />
                               Due {format(new Date(task.due_date), 'MMM d, yyyy')}
                             </div>
                           )}
+                          <div className={cn(
+                            "flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md",
+                            task.status === 'done' && "text-red-600/80",
+                            task.status === 'in-progress' && "text-green-600/80"
+                          )}>
+                            <Clock className="h-3.5 w-3.5" />
+                            {format(new Date(task.created_at), 'MMM d, yyyy')}
+                          </div>
                           <Badge variant="secondary" className={cn(
                             "px-2 py-1 text-xs rounded-md shadow-sm backdrop-blur-sm",
-                            task.status === 'completed' 
-                              ? "bg-green-100/80 text-green-700 border-green-200/50" 
-                              : "bg-white/80 text-blue-700 border-blue-200/50"
+                            task.status === 'done' && "bg-red-100 text-red-700 border-red-200/50",
+                            task.status === 'in-progress' && "bg-green-100 text-green-700 border-green-200/50",
+                            task.status === 'todo' && "bg-gray-100 text-gray-700 border-gray-200/50"
                           )}>
-                            {task.status}
+                            {task.status === 'in-progress' ? 'In Progress' : 
+                             task.status === 'done' ? 'Completed' : 'To Do'}
                           </Badge>
                         </div>
                       </div>
