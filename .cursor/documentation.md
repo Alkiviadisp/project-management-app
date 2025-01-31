@@ -124,6 +124,92 @@ This is a modern project management application built with Next.js, React, and S
 - created_at: timestamp
 - updated_at: timestamp
 
+### Security Policies
+#### Row Level Security (RLS)
+The application implements Row Level Security in Supabase for data protection:
+
+##### Users Table Policies
+```sql
+-- Enable RLS
+alter table users enable row level security;
+
+-- Users can read their own data
+create policy "Enable read access for users"
+on users for select
+using (auth.uid() = id);
+
+-- Users can update their own data
+create policy "Enable update for users"
+on users for update
+using (auth.uid() = id)
+with check (auth.uid() = id);
+```
+
+##### Tasks Table Policies
+```sql
+-- Enable RLS
+alter table tasks enable row level security;
+
+-- Insert policy
+create policy "Enable insert for authenticated users"
+on tasks for insert
+with check (
+  auth.uid() = created_by
+  or
+  exists (
+    select 1 from projects
+    where projects.id = project_id
+    and projects.created_by = auth.uid()
+  )
+);
+
+-- Select policy
+create policy "Enable read for authenticated users"
+on tasks for select
+using (
+  auth.uid() = created_by
+  or
+  exists (
+    select 1 from projects
+    where projects.id = project_id
+    and projects.created_by = auth.uid()
+  )
+);
+
+-- Update policy
+create policy "Enable update for authenticated users"
+on tasks for update
+using (
+  auth.uid() = created_by
+  or
+  exists (
+    select 1 from projects
+    where projects.id = project_id
+    and projects.created_by = auth.uid()
+  )
+);
+
+-- Delete policy
+create policy "Enable delete for authenticated users"
+on tasks for delete
+using (
+  auth.uid() = created_by
+  or
+  exists (
+    select 1 from projects
+    where projects.id = project_id
+    and projects.created_by = auth.uid()
+  )
+);
+```
+
+These policies ensure:
+- Users can only access their own user data
+- Users can create tasks in projects they own
+- Users can view tasks they created or tasks in their projects
+- Users can update tasks they created or tasks in their projects
+- Users can delete tasks they created or tasks in their projects
+
 ### UI/UX Features
 1. **Form Components**:
    - Custom input fields with validation
