@@ -23,7 +23,8 @@ import {
   MoreVertical,
   Calendar as CalendarIcon,
   Pencil,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
@@ -357,6 +358,22 @@ export default function ProjectDetailsPage() {
     }
   }
 
+  // Add this sorting function before the return statement
+  const sortedTasks = React.useMemo(() => {
+    return [...tasks].sort((a, b) => {
+      // If both tasks have due dates, compare them
+      if (a.due_date && b.due_date) {
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      }
+      // If only a has a due date, it comes first
+      if (a.due_date) return -1
+      // If only b has a due date, it comes first
+      if (b.due_date) return 1
+      // If neither has a due date, sort by created date
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+  }, [tasks])
+
   if (isLoading || !project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -422,6 +439,14 @@ export default function ProjectDetailsPage() {
                         <FolderKanban className="h-5 w-5 text-blue-600" />
                       </div>
                       <h1 className="text-2xl font-bold text-gray-900">{project.title}</h1>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => router.push(`/projects/new?edit=${project.id}`)}
+                        className="rounded-lg hover:bg-blue-50 text-blue-600"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                     </div>
                     <p className="text-sm text-muted-foreground max-w-2xl">{project.description}</p>
                   </div>
@@ -662,7 +687,7 @@ export default function ProjectDetailsPage() {
               </div>
 
               <div className="space-y-4">
-                {tasks.map((task) => (
+                {sortedTasks.map((task) => (
                   <div
                     key={task.id}
                     className={cn(

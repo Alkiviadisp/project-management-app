@@ -1,14 +1,14 @@
 # Project Management Application Documentation
 
 ## Overview
-This is a modern project management application built with Next.js, React, and Supabase. The application features a clean, professional UI using TailwindCSS and various UI components from Radix UI. It's designed to help teams manage projects, tasks, and collaboration effectively.
+This is a modern project management application built with Next.js, React, and Supabase. The application features a clean, professional UI using TailwindCSS and various UI components from Shadcn UI. It's designed to help teams manage projects, tasks, and collaboration effectively.
 
 ## Tech Stack
-- **Frontend Framework**: Next.js 15.1.5 with React 19
-- **Styling**: TailwindCSS with custom UI components
+- **Frontend Framework**: Next.js 14 with App Router
+- **Styling**: TailwindCSS with Shadcn UI components
 - **Database & Authentication**: Supabase
 - **Form Management**: React Hook Form with Zod validation
-- **UI Components**: Radix UI primitives
+- **UI Components**: Shadcn UI components
 - **Icons**: Lucide React
 - **Date Handling**: date-fns
 - **Notifications**: Sonner toast notifications
@@ -22,35 +22,35 @@ This is a modern project management application built with Next.js, React, and S
   - Projects
   - Tasks
   - Settings
-- Active state indicators with blue background
+- Active state indicators with hover effects
 - Mobile-responsive layout
 
 ### 2. Dashboard
-- Kanban-style board layout
-- Three columns: To Do, In Progress, Done
+- Project statistics and overview
+- Task distribution visualization
 - Project cards with:
   - Progress indicators
   - Color-coded status
   - Project descriptions
-  - Quick action buttons
+  - Quick action buttons (edit, delete)
   - Due dates
   - Priority indicators
   - Tags
+  - Project owner information
 
 ### 3. Project Management
 #### Project Creation
 - Comprehensive project form with:
   - Basic Information:
     - Project Title
-    - Project Owner
-    - Status (Not Started, In Progress, Completed)
+    - Project Owner (automatically set to creator's nickname)
+    - Status (todo, in-progress, done)
     - Priority (Low, Medium, High)
     - Due Date with Calendar Picker
   - Detailed Information:
     - Description
     - Tags (comma-separated)
     - File Attachments with preview
-    - Initial Comments
 - Form validation using Zod
 - File upload functionality to Supabase storage
 
@@ -61,17 +61,22 @@ This is a modern project management application built with Next.js, React, and S
 - File attachment support with preview
 - Progress tracking
 - Due date management with calendar integration
+- Inline project editing with edit button
+- Automatic project owner assignment
 
 ### 4. Tasks
 #### Task Management
 - Comprehensive task creation and management
 - Task listing with status indicators
+- Tasks sorted by due date (most urgent first)
+- Tasks without due dates appear last
 - Task features include:
   - Title and description
   - Due date with calendar picker
-  - Status tracking (Pending/Completed)
+  - Status tracking (todo, in-progress, done)
   - Creation and due dates display
   - Quick status toggle
+  - Edit functionality through modal
   - Delete functionality
 
 #### Task Creation Form
@@ -86,12 +91,13 @@ This is a modern project management application built with Next.js, React, and S
 
 #### Task List Features
 - Visual status indicators
-- Due date tracking
+- Due date tracking with sorting
 - Creation date display
 - Hover effects for better UX
-- Quick actions menu
+- Quick actions menu (edit, delete)
 - Status toggle with checkbox
 - Delete confirmation
+- Kanban-style column layout
 
 ## Implementation Details
 
@@ -105,12 +111,12 @@ This is a modern project management application built with Next.js, React, and S
 #### Projects Table
 - title: string
 - description: string
-- owner_id: string (foreign key to users)
 - status: enum ('todo', 'in-progress', 'done')
 - due_date: timestamp
 - priority: enum ('low', 'medium', 'high')
 - tags: string[]
 - attachments: jsonb
+- color: string
 - created_at: timestamp
 - created_by: string (foreign key to users)
 
@@ -118,7 +124,7 @@ This is a modern project management application built with Next.js, React, and S
 - title: string
 - description: string
 - due_date: timestamp
-- status: enum ('pending', 'completed')
+- status: enum ('todo', 'in-progress', 'done')
 - project_id: string (foreign key to projects)
 - created_by: string (foreign key to users)
 - created_at: timestamp
@@ -218,6 +224,7 @@ These policies ensure:
    - Form validation feedback
    - Loading states
    - Success/error notifications
+   - Modal dialogs for task editing
 
 2. **Navigation**:
    - Collapsible sidebar
@@ -225,6 +232,7 @@ These policies ensure:
    - Active state indicators
    - Mobile-responsive menu
    - Back navigation
+   - Quick edit buttons
 
 3. **Notifications**:
    - Toast notifications for actions
@@ -233,15 +241,14 @@ These policies ensure:
    - Success confirmations
 
 ### Styling Guidelines
-- Blue primary color (#2563eb)
-- White backgrounds for content
 - Consistent spacing using TailwindCSS utilities
 - Responsive design breakpoints
 - Shadow and border styling for cards
 - Hover and active states
 - Color coding for status and priority
-- Gradient backgrounds
 - Custom calendar styling
+- Modal dialog styling
+- Edit button positioning and styling
 
 ## Best Practices
 1. **Code Organization**:

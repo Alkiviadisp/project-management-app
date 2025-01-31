@@ -79,12 +79,46 @@ export default function NewProjectPage() {
   const supabase = createClient()
   const editId = searchParams.get('edit')
   const [isEditing, setIsEditing] = React.useState(false)
+  const [userNickname, setUserNickname] = React.useState("")
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues,
+    defaultValues: {
+      ...defaultValues,
+      owner: userNickname,
+    },
     mode: "onChange",
   })
+
+  React.useEffect(() => {
+    async function fetchUserNickname() {
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError) throw userError
+        if (!user) throw new Error("User not found")
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('id', user.id)
+          .single()
+
+        if (profileError) throw profileError
+        if (!profile) throw new Error("Profile not found")
+
+        setUserNickname(profile.nickname || user.email?.split('@')[0] || 'Anonymous')
+        
+        if (!editId) {
+          form.setValue('owner', profile.nickname || user.email?.split('@')[0] || 'Anonymous')
+        }
+      } catch (error) {
+        console.error('Error fetching user nickname:', error)
+        toast.error("Failed to fetch user information")
+      }
+    }
+
+    fetchUserNickname()
+  }, [form, editId])
 
   React.useEffect(() => {
     async function fetchProject() {
@@ -94,18 +128,25 @@ export default function NewProjectPage() {
         setIsLoading(true)
         const { data, error } = await supabase
           .from('projects')
-          .select('*')
+          .select(`
+            *,
+            profiles:created_by (
+              nickname
+            )
+          `)
           .eq('id', editId)
           .single()
 
         if (error) throw error
         if (!data) throw new Error('Project not found')
 
-        // Set form values
+        const ownerNickname = data.profiles?.nickname || data.owner || ''
+        setUserNickname(ownerNickname)
+
         form.reset({
           title: data.title,
           description: data.description,
-          owner: data.owner || '',
+          owner: ownerNickname,
           status: data.status,
           dueDate: new Date(data.due_date),
           priority: data.priority,
@@ -113,7 +154,6 @@ export default function NewProjectPage() {
           attachments: data.attachments || [],
         })
 
-        // Set tags input
         setTagsInput(data.tags?.join(', ') || '')
         setIsEditing(true)
       } catch (error) {
@@ -132,27 +172,22 @@ export default function NewProjectPage() {
     try {
       setIsLoading(true)
 
-      // Get current user first
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError) throw userError
       if (!user) throw new Error("User not found")
 
-      // Handle file uploads
       const uploadedFiles = []
       if (files.length > 0) {
         for (const file of files) {
           try {
-            // Validate file size
             if (file.size > 10 * 1024 * 1024) {
               throw new Error(`File ${file.name} is too large. Maximum size is 10MB`)
             }
 
-            // Validate file type
             if (!file.type.match(/^image\/(jpeg|png|gif|webp)$/)) {
               throw new Error(`File ${file.name} is not a supported image type`)
             }
 
-            // Create a unique file name
             const timestamp = new Date().getTime()
             const randomString = Math.random().toString(36).substring(2, 15)
             const cleanFileName = file.name.toLowerCase().replace(/[^a-z0-9.-]/g, '-')
@@ -166,7 +201,6 @@ export default function NewProjectPage() {
               path: filePath
             })
 
-            // Upload the file
             const { error: uploadError, data: uploadData } = await supabase.storage
               .from('project-attachments')
               .upload(filePath, file, {
@@ -186,7 +220,6 @@ export default function NewProjectPage() {
 
             console.log('Upload successful:', uploadData)
 
-            // Get the public URL
             const { data: { publicUrl } } = supabase.storage
               .from('project-attachments')
               .getPublicUrl(filePath)
@@ -215,25 +248,21 @@ export default function NewProjectPage() {
             toast.error(`Failed to upload ${file.name}`, {
               description: fileError instanceof Error ? fileError.message : "Upload failed"
             })
-            // Continue with other files
             continue
           }
         }
       }
 
-      // If we have files but none were uploaded successfully, stop here
       if (files.length > 0 && uploadedFiles.length === 0) {
         throw new Error("No files were uploaded successfully")
       }
 
-      // If editing, merge with existing attachments
       let finalAttachments = uploadedFiles
       if (isEditing) {
         const existingAttachments = data.attachments || []
         finalAttachments = [...existingAttachments, ...uploadedFiles]
       }
 
-      // Generate a random color for new projects
       const colors = [
         'bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 
         'bg-teal-500', 'bg-green-500', 'bg-yellow-500', 'bg-orange-500',
@@ -250,14 +279,22 @@ export default function NewProjectPage() {
         priority: data.priority,
         tags: data.tags || [],
         attachments: finalAttachments,
-        color: isEditing ? undefined : randomColor // Only set color for new projects
+        color: isEditing ? undefined : randomColor
       }
 
       let error
       if (isEditing) {
+        const updateData = Object.fromEntries(
+          Object.entries(projectData)
+            .filter(([key, value]) => 
+              value !== undefined && 
+              !['created_by'].includes(key)
+            )
+        )
+        
         const { error: updateError } = await supabase
           .from('projects')
-          .update(projectData)
+          .update(updateData)
           .eq('id', editId)
         error = updateError
       } else {
@@ -267,7 +304,10 @@ export default function NewProjectPage() {
         error = insertError
       }
 
-      if (error) throw error
+      if (error) {
+        console.error('Database error:', error)
+        throw error
+      }
 
       toast.success(isEditing ? "Project Updated" : "Project Created", {
         description: isEditing 
@@ -435,7 +475,6 @@ export default function NewProjectPage() {
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                      {/* Left Column */}
                       <div className="space-y-8">
                         <FormField
                           control={form.control}
@@ -463,12 +502,15 @@ export default function NewProjectPage() {
                               <FormLabel className="text-base font-semibold">Project Owner</FormLabel>
                               <FormControl>
                                 <Input 
-                                  placeholder="Enter project owner" 
-                                  className="h-12 text-base transition-colors hover:border-blue-200 focus:border-blue-400"
-                                  {...field} 
+                                  {...field}
+                                  disabled={true}
+                                  readOnly={true}
+                                  className="h-12 text-base bg-gray-50 transition-colors cursor-not-allowed"
                                 />
                               </FormControl>
-                              <FormMessage />
+                              <FormDescription className="text-sm text-muted-foreground">
+                                Project owner is automatically set and cannot be changed
+                              </FormDescription>
                             </FormItem>
                           )}
                         />
@@ -579,7 +621,6 @@ export default function NewProjectPage() {
                         />
                       </div>
 
-                      {/* Right Column */}
                       <div className="space-y-8">
                         <FormField
                           control={form.control}
