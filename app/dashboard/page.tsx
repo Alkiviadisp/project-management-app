@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { LayoutDashboard, Clock, ArrowRight, CheckCircle2, FolderKanban, Search, Users, CalendarCheck, ListTodo } from "lucide-react"
+import { LayoutDashboard, Clock, ArrowRight, CheckCircle2, FolderKanban, Search, Users, CalendarCheck, ListTodo, TrendingUp, TrendingDown } from "lucide-react"
 import {
   SidebarInset,
   SidebarProvider,
@@ -96,30 +96,23 @@ const calculateStats = (projects: Project[]) => {
   ]
 }
 
-// Add this before the DashboardPage component
-const priorityChartConfig = {
-  priority: {
-    label: "Projects",
-  },
-  low: {
-    label: "Low Priority",
-    color: "hsl(142.1 76.2% 36.3%)", // Green
-  },
-  medium: {
-    label: "Medium Priority",
-    color: "hsl(48 96.5% 53.9%)", // Amber
-  },
-  high: {
-    label: "High Priority",
-    color: "hsl(346.8 77.2% 49.8%)", // Red
-  },
-} satisfies ChartConfig
-
-// Add this before the DashboardPage component
-const projectProgressConfig = {
+// Update the chart config before the DashboardPage component
+const chartConfig = {
   projects: {
     label: "Projects",
-    color: "hsl(var(--chart-1))",
+    color: "#00C2FF", // Electric Blue for bar chart
+  },
+  todo: {
+    label: "To Do",
+    color: "#01E076", // Bright Green
+  },
+  inProgress: {
+    label: "In Progress",
+    color: "#00C2FF", // Electric Blue
+  },
+  done: {
+    label: "Completed",
+    color: "#E5E5E5", // Pale Grey
   },
 } satisfies ChartConfig
 
@@ -166,6 +159,38 @@ export default function DashboardPage() {
         projects: dayProjects.length,
       }
     })
+  }, [projects])
+
+  // Update the projectStatusData with new colors
+  const projectStatusData = React.useMemo(() => [
+    { status: "todo", count: projects.filter(p => p.status === "todo").length, fill: "#01E076" }, // Green
+    { status: "inProgress", count: projects.filter(p => p.status === "in-progress").length, fill: "#00C2FF" }, // Blue
+    { status: "done", count: projects.filter(p => p.status === "done").length, fill: "#E5E5E5" }, // Pale Grey
+  ], [projects])
+
+  // Calculate the month-over-month change in completed projects
+  const completedProjectsTrend = React.useMemo(() => {
+    const currentMonth = new Date().getMonth()
+    const lastMonth = currentMonth - 1
+    
+    const thisMonthCompleted = projects.filter(p => {
+      const date = new Date(p.created_at)
+      return date.getMonth() === currentMonth
+    }).length
+
+    const lastMonthCompleted = projects.filter(p => {
+      const date = new Date(p.created_at)
+      return date.getMonth() === lastMonth
+    }).length
+
+    const percentageChange = lastMonthCompleted === 0 
+      ? thisMonthCompleted * 100 
+      : ((thisMonthCompleted - lastMonthCompleted) / lastMonthCompleted) * 100
+
+    return {
+      trend: percentageChange.toFixed(1),
+      isUp: percentageChange >= 0
+    }
   }, [projects])
 
   React.useEffect(() => {
@@ -362,7 +387,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <ChartContainer 
-                  config={projectProgressConfig}
+                  config={chartConfig}
                   className="mx-auto h-[180px]"
                 >
                   <BarChart data={projectProgressData}>
@@ -379,7 +404,7 @@ export default function DashboardPage() {
                     />
                     <Bar 
                       dataKey="projects" 
-                      fill="var(--color-projects)" 
+                      fill="#00C2FF"  // Electric Blue
                       radius={[4, 4, 0, 0]} 
                     />
                   </BarChart>
@@ -391,15 +416,15 @@ export default function DashboardPage() {
                 </div>
               </CardFooter>
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Task Priority Distribution</CardTitle>
-                <CardDescription>Distribution of projects by priority level</CardDescription>
+            <Card className="flex flex-col">
+              <CardHeader className="items-center pb-0">
+                <CardTitle>Project Status Distribution</CardTitle>
+                <CardDescription>{format(new Date(), 'MMMM yyyy')}</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1 pb-0">
                 <ChartContainer
-                  config={priorityChartConfig}
-                  className="mx-auto h-[180px]"
+                  config={chartConfig}
+                  className="mx-auto aspect-square max-h-[250px]"
                 >
                   <PieChart>
                     <ChartTooltip
@@ -407,17 +432,38 @@ export default function DashboardPage() {
                       content={<ChartTooltipContent hideLabel />}
                     />
                     <Pie
-                      data={priorityData}
+                      data={projectStatusData}
                       dataKey="count"
-                      nameKey="priority"
+                      nameKey="status"
                       innerRadius={60}
-                    />
+                    >
+                      <Pie
+                        data={priorityData}
+                        dataKey="count"
+                        nameKey="priority"
+                        fill="#000"
+                        label
+                      />
+                    </Pie>
                   </PieChart>
                 </ChartContainer>
               </CardContent>
               <CardFooter className="flex-col gap-2 text-sm">
+                <div className="flex items-center gap-2 font-medium leading-none">
+                  {completedProjectsTrend.isUp ? (
+                    <>
+                      Trending up by {completedProjectsTrend.trend}% this month{" "}
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                    </>
+                  ) : (
+                    <>
+                      Trending down by {Math.abs(Number(completedProjectsTrend.trend))}% this month{" "}
+                      <TrendingDown className="h-4 w-4 text-red-500" />
+                    </>
+                  )}
+                </div>
                 <div className="leading-none text-muted-foreground">
-                  Total Projects: {projects.length}
+                  Showing total projects by current status
                 </div>
               </CardFooter>
             </Card>
@@ -427,7 +473,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {/* To Do Column */}
             <div className="flex flex-col gap-4">
-              <div className="rounded-xl bg-[rgb(245,245,245)] p-4">
+              <div className="rounded-xl bg-[#01E076]/10 p-4">
                 <div className="flex items-center gap-2 px-2 pb-4">
                   <Clock className="h-5 w-5 text-muted-foreground" />
                   <h2 className="font-semibold">To Do</h2>
@@ -450,7 +496,7 @@ export default function DashboardPage() {
 
             {/* In Progress Column */}
             <div className="flex flex-col gap-4">
-              <div className="rounded-xl bg-[rgb(245,245,245)] p-4">
+              <div className="rounded-xl bg-[#00C2FF]/10 p-4">
                 <div className="flex items-center gap-2 px-2 pb-4">
                   <ArrowRight className="h-5 w-5 text-muted-foreground" />
                   <h2 className="font-semibold">In Progress</h2>
@@ -473,7 +519,7 @@ export default function DashboardPage() {
 
             {/* Done Column */}
             <div className="flex flex-col gap-4">
-              <div className="rounded-xl bg-[rgb(245,245,245)] p-4">
+              <div className="rounded-xl bg-[#E5E5E5]/20 p-4">
                 <div className="flex items-center gap-2 px-2 pb-4">
                   <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
                   <h2 className="font-semibold">Done</h2>
