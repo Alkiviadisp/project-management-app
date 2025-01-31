@@ -715,37 +715,27 @@ export default function ProjectDetailsPage() {
                       </button>
                       <div className="flex-grow min-w-0">
                         <h3 className={cn(
-                          "text-base font-medium truncate",
-                          task.status === 'done' && "text-red-700 line-through",
-                          task.status === 'in-progress' && "text-green-700"
+                          "text-base font-medium text-gray-900 truncate",
+                          task.status === 'done' && "line-through"
                         )}>
                           {task.title}
                         </h3>
                         {task.description && (
                           <p className={cn(
-                            "mt-1 text-sm text-muted-foreground line-clamp-2",
-                            task.status === 'done' && "text-red-600/80 line-through",
-                            task.status === 'in-progress' && "text-green-600/80"
+                            "mt-1 text-sm text-gray-600 line-clamp-2",
+                            task.status === 'done' && "line-through"
                           )}>
                             {task.description}
                           </p>
                         )}
-                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-600">
                           {task.due_date && (
-                            <div className={cn(
-                              "flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md",
-                              task.status === 'done' && "text-red-600/80",
-                              task.status === 'in-progress' && "text-green-600/80"
-                            )}>
+                            <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
                               <CalendarDays className="h-3.5 w-3.5" />
                               Due {format(new Date(task.due_date), 'MMM d, yyyy')}
                             </div>
                           )}
-                          <div className={cn(
-                            "flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md",
-                            task.status === 'done' && "text-red-600/80",
-                            task.status === 'in-progress' && "text-green-600/80"
-                          )}>
+                          <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
                             <Clock className="h-3.5 w-3.5" />
                             {format(new Date(task.created_at), 'MMM d, yyyy')}
                           </div>

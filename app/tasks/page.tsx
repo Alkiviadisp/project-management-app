@@ -136,11 +136,13 @@ export default function TasksPage() {
   }, [])
 
   const filteredTasks = React.useMemo(() => {
-    return tasks.filter(task => 
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.project.title.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    return tasks
+      .filter(task => task.status !== 'done') // Filter out completed tasks
+      .filter(task => 
+        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.project.title.toLowerCase().includes(searchQuery.toLowerCase())
+      )
   }, [tasks, searchQuery])
 
   const toggleTaskStatus = async (taskId: string, currentStatus: ProjectStatus) => {
@@ -220,21 +222,12 @@ export default function TasksPage() {
             <div className="relative w-64">
               <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search tasks..."
+                placeholder="Search Tasks by Project Title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-8"
               />
             </div>
-            <Button
-              asChild
-              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
-            >
-              <Link href="/projects">
-                <Plus className="mr-2 h-4 w-4" />
-                New Task
-              </Link>
-            </Button>
           </div>
         </header>
 
@@ -305,21 +298,19 @@ export default function TasksPage() {
                       <div className="flex-grow min-w-0">
                         <h3 className={cn(
                           "text-base font-medium text-gray-900 truncate",
-                          task.status === 'done' && "text-red-700 line-through",
-                          task.status === 'in-progress' && "text-green-700"
+                          task.status === 'done' && "line-through"
                         )}>
                           {task.title}
                         </h3>
                         {task.description && (
                           <p className={cn(
-                            "mt-1 text-sm text-muted-foreground line-clamp-2",
-                            task.status === 'done' && "text-red-600/80 line-through",
-                            task.status === 'in-progress' && "text-green-600/80"
+                            "mt-1 text-sm text-gray-600 line-clamp-2",
+                            task.status === 'done' && "line-through"
                           )}>
                             {task.description}
                           </p>
                         )}
-                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-600">
                           <Link
                             href={`/projects/${task.project_id}`}
                             className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md hover:bg-blue-50 transition-colors"
@@ -327,20 +318,12 @@ export default function TasksPage() {
                             <FolderKanban className="h-3.5 w-3.5" />
                             {task.project.title}
                           </Link>
-                          <div className={cn(
-                            "flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md",
-                            task.status === 'done' && "text-red-600/80",
-                            task.status === 'in-progress' && "text-green-600/80"
-                          )}>
+                          <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
                             <Clock className="h-3.5 w-3.5" />
                             {format(new Date(task.created_at), 'MMM d, yyyy')}
                           </div>
                           {task.due_date && (
-                            <div className={cn(
-                              "flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md",
-                              task.status === 'done' && "text-red-600/80",
-                              task.status === 'in-progress' && "text-green-600/80"
-                            )}>
+                            <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
                               <CalendarDays className="h-3.5 w-3.5" />
                               Due {format(new Date(task.due_date), 'MMM d, yyyy')}
                             </div>
