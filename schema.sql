@@ -33,6 +33,7 @@ create table if not exists projects (
     due_date timestamptz,
     priority text check (priority in ('low', 'medium', 'high')),
     tags text[] default array[]::text[],
+    cover_image jsonb default null,
     attachments jsonb default '[]'::jsonb,
     color text,
     created_at timestamptz default now(),
@@ -186,9 +187,40 @@ VALUES (
   '{image/jpeg,image/png,image/gif,image/webp}'
 ) ON CONFLICT (id) DO NOTHING;
 
+-- Drop existing storage policies if they exist
+DROP POLICY IF EXISTS "Give users authenticated access to own folder" ON storage.objects;
+DROP POLICY IF EXISTS "Give public access to view files" ON storage.objects;
+
+-- Create new storage policies
+CREATE POLICY "Allow authenticated users to upload project files"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'project-attachments' AND
+  (
+    (storage.foldername(name))[1] = 'files' OR 
+    (storage.foldername(name))[1] = 'covers'
+  ) AND
+  (storage.foldername(name))[2] = auth.uid()::text
+);
+
+CREATE POLICY "Allow authenticated users to delete own files"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'project-attachments' AND
+  (
+    (storage.foldername(name))[1] = 'files' OR 
+    (storage.foldername(name))[1] = 'covers'
+  ) AND
+  (storage.foldername(name))[2] = auth.uid()::text
+);
+
+CREATE POLICY "Allow public to view project files"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'project-attachments');
+
 -- Enable RLS
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
 -- Create indexes
@@ -277,6 +309,7 @@ CREATE POLICY "Give public access to view files" ON storage.objects
 -- Add comments for documentation
 COMMENT ON TABLE public.projects IS 'Stores project information';
 COMMENT ON COLUMN public.projects.attachments IS 'Array of file attachments with structure: [{url: string, name: string, type: string, size: number, path: string}]';
+COMMENT ON COLUMN public.projects.cover_image IS 'Project cover image with structure: {url: string, name: string, type: string, size: number, path: string}';
 COMMENT ON COLUMN public.projects.color IS 'Tailwind CSS color class for the project card';
 
 -- Refresh schema cache

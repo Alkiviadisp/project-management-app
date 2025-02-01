@@ -42,6 +42,10 @@ type Project = {
   }>
   color: string
   created_at: string
+  cover_image: {
+    url: string
+    name: string
+  } | null
 }
 
 export default function ProjectsPage() {
@@ -208,7 +212,6 @@ export default function ProjectsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {projects.map((project) => {
                   const colors = getCardColors(project.color)
-                  const firstAttachment = project.attachments?.[0]
 
                   return (
                     <div
@@ -250,25 +253,25 @@ export default function ProjectsPage() {
                       </div>
 
                       <div className="aspect-[3/2] w-full overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
-                        {firstAttachment ? (
+                        {project.cover_image ? (
                           <Dialog>
                             <DialogTrigger asChild>
-                                <img
-                                  src={firstAttachment.url}
-                                  alt={firstAttachment.name}
+                              <img
+                                src={project.cover_image.url}
+                                alt={project.cover_image.name}
                                 className="h-full w-full object-cover transition-transform duration-300 hover:scale-105 cursor-zoom-in"
-                                />
+                              />
                             </DialogTrigger>
                             <DialogContent className="max-w-3xl">
                               <DialogHeader>
                                 <DialogTitle>{project.title}</DialogTitle>
-                                <DialogDescription>Project Image</DialogDescription>
+                                <DialogDescription>Project Cover Image</DialogDescription>
                               </DialogHeader>
-                                    <img
-                                src={firstAttachment.url}
-                                alt={firstAttachment.name}
+                              <img
+                                src={project.cover_image.url}
+                                alt={project.cover_image.name}
                                 className="w-full rounded-lg"
-                                    />
+                              />
                             </DialogContent>
                           </Dialog>
                         ) : (

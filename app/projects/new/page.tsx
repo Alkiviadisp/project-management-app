@@ -55,6 +55,7 @@ const projectFormSchema = z.object({
   }),
   priority: z.enum(["low", "medium", "high"]),
   tags: z.string().array(),
+  cover_image: z.any().optional(),
   attachments: z.any().array().optional(),
 })
 
@@ -67,12 +68,23 @@ const defaultValues: Partial<ProjectFormValues> = {
   status: "todo",
   priority: "medium",
   tags: [],
+  cover_image: undefined,
   attachments: [],
+}
+
+// Update the type definition for better type safety
+type StoredImage = {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+  path: string;
 }
 
 export default function NewProjectPage() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [files, setFiles] = React.useState<File[]>([])
+  const [coverImage, setCoverImage] = React.useState<File | StoredImage | undefined>(undefined)
   const [tagsInput, setTagsInput] = React.useState("")
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -83,10 +95,7 @@ export default function NewProjectPage() {
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues: {
-      ...defaultValues,
-      owner: userNickname,
-    },
+    defaultValues,
     mode: "onChange",
   })
 
@@ -143,6 +152,11 @@ export default function NewProjectPage() {
         const ownerNickname = data.profiles?.nickname || data.owner || ''
         setUserNickname(ownerNickname)
 
+        // Set cover image if it exists
+        if (data.cover_image) {
+          setCoverImage(data.cover_image as StoredImage)
+        }
+
         form.reset({
           title: data.title,
           description: data.description,
@@ -151,8 +165,14 @@ export default function NewProjectPage() {
           dueDate: new Date(data.due_date),
           priority: data.priority,
           tags: data.tags || [],
+          cover_image: data.cover_image,
           attachments: data.attachments || [],
         })
+
+        // Set existing files if there are any attachments
+        if (data.attachments?.length > 0) {
+          setFiles([])  // Reset files since we're in edit mode
+        }
 
         setTagsInput(data.tags?.join(', ') || '')
         setIsEditing(true)
@@ -176,6 +196,63 @@ export default function NewProjectPage() {
       if (userError) throw userError
       if (!user) throw new Error("User not found")
 
+      // Handle cover image upload first
+      let coverImageData = null
+      if (coverImage) {
+        try {
+          // If it's already a stored image and we're editing, keep it as is
+          if (!isEditing || coverImage instanceof File) {
+            if (coverImage instanceof File) {
+              if (coverImage.size > 10 * 1024 * 1024) {
+                throw new Error("Cover image is too large. Maximum size is 10MB")
+              }
+
+              if (!coverImage.type.match(/^image\/(jpeg|png|gif|webp)$/)) {
+                throw new Error("Cover image is not a supported image type")
+              }
+
+              const timestamp = new Date().getTime()
+              const randomString = Math.random().toString(36).substring(2, 15)
+              const cleanFileName = coverImage.name.toLowerCase().replace(/[^a-z0-9.-]/g, '-')
+              const fileName = `${timestamp}-${randomString}-${cleanFileName}`
+              const filePath = `covers/${user.id}/${fileName}`
+
+              const { error: uploadError, data: uploadData } = await supabase.storage
+                .from('project-attachments')
+                .upload(filePath, coverImage, {
+                  cacheControl: '3600',
+                  contentType: coverImage.type,
+                  upsert: false
+                })
+
+              if (uploadError) throw uploadError
+
+              const { data: { publicUrl } } = supabase.storage
+                .from('project-attachments')
+                .getPublicUrl(filePath)
+
+              coverImageData = {
+                url: publicUrl,
+                name: coverImage.name,
+                type: coverImage.type,
+                size: coverImage.size,
+                path: filePath
+              }
+            }
+          } else {
+            // If it's a stored image in edit mode, keep the existing data
+            coverImageData = coverImage as StoredImage
+          }
+        } catch (error) {
+          console.error('Cover image upload error:', error)
+          toast.error("Failed to upload cover image", {
+            description: error instanceof Error ? error.message : "Upload failed"
+          })
+          throw error
+        }
+      }
+
+      // Handle regular attachments upload
       const uploadedFiles = []
       if (files.length > 0) {
         for (const file of files) {
@@ -192,14 +269,7 @@ export default function NewProjectPage() {
             const randomString = Math.random().toString(36).substring(2, 15)
             const cleanFileName = file.name.toLowerCase().replace(/[^a-z0-9.-]/g, '-')
             const fileName = `${timestamp}-${randomString}-${cleanFileName}`
-            const filePath = `${user.id}/${fileName}`
-
-            console.log('Starting file upload:', {
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              path: filePath
-            })
+            const filePath = `files/${user.id}/${fileName}`
 
             const { error: uploadError, data: uploadData } = await supabase.storage
               .from('project-attachments')
@@ -209,24 +279,11 @@ export default function NewProjectPage() {
                 upsert: false
               })
 
-            if (uploadError) {
-              console.error('Upload error details:', uploadError)
-              throw new Error(`Failed to upload file ${file.name}: ${uploadError.message || 'Unknown error'}`)
-            }
-
-            if (!uploadData) {
-              throw new Error(`No upload data returned for ${file.name}`)
-            }
-
-            console.log('Upload successful:', uploadData)
+            if (uploadError) throw uploadError
 
             const { data: { publicUrl } } = supabase.storage
               .from('project-attachments')
               .getPublicUrl(filePath)
-
-            if (!publicUrl) {
-              throw new Error(`Failed to get public URL for ${file.name}`)
-            }
 
             uploadedFiles.push({
               url: publicUrl,
@@ -235,26 +292,14 @@ export default function NewProjectPage() {
               size: file.size,
               path: filePath
             })
-
-            console.log('File processed successfully:', {
-              name: file.name,
-              url: publicUrl
-            })
           } catch (fileError) {
-            console.error('File processing error:', {
-              file: file.name,
-              error: fileError
-            })
+            console.error('File processing error:', fileError)
             toast.error(`Failed to upload ${file.name}`, {
               description: fileError instanceof Error ? fileError.message : "Upload failed"
             })
             continue
           }
         }
-      }
-
-      if (files.length > 0 && uploadedFiles.length === 0) {
-        throw new Error("No files were uploaded successfully")
       }
 
       let finalAttachments = uploadedFiles
@@ -278,6 +323,7 @@ export default function NewProjectPage() {
         due_date: data.dueDate.toISOString(),
         priority: data.priority,
         tags: data.tags || [],
+        cover_image: coverImageData,
         attachments: finalAttachments,
         color: isEditing ? undefined : randomColor
       }
@@ -323,6 +369,16 @@ export default function NewProjectPage() {
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleCoverImageChange = (file: File | undefined) => {
+    if (file) {
+      setCoverImage(file)
+      form.setValue('cover_image', file)
+    } else {
+      setCoverImage(undefined)
+      form.setValue('cover_image', undefined)
     }
   }
 
@@ -381,7 +437,92 @@ export default function NewProjectPage() {
                         </div>
                         <h2 className="text-xl font-semibold">Project Information</h2>
                       </div>
-                      <div className="ml-auto">
+                      <div className="ml-auto flex items-center gap-2">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-2 border-blue-200 hover:bg-blue-50 transition-colors"
+                            >
+                              <Upload className="h-4 w-4 text-blue-500" />
+                              <span className="text-sm text-blue-600">Cover Image</span>
+                              {coverImage && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="ml-1 bg-blue-100 text-blue-600"
+                                >
+                                  1
+                                </Badge>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-4" align="end">
+                            <div className="space-y-4">
+                              <div 
+                                className="relative group flex flex-col items-center justify-center h-40 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/30 px-4 py-4 text-center transition-all hover:border-blue-400 hover:bg-blue-50/50"
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  const file = Array.from(e.dataTransfer.files).find(
+                                    file => file.type.startsWith('image/')
+                                  );
+                                  if (file) {
+                                    handleCoverImageChange(file);
+                                  }
+                                }}
+                              >
+                                {coverImage ? (
+                                  <div className="relative w-full h-full">
+                                    <img
+                                      src={
+                                        coverImage instanceof File 
+                                          ? URL.createObjectURL(coverImage)
+                                          : (coverImage as StoredImage).url
+                                      }
+                                      alt="Cover preview"
+                                      className="w-full h-full object-cover rounded-lg"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="icon"
+                                      className="absolute top-2 right-2 h-6 w-6"
+                                      onClick={() => {
+                                        if (coverImage instanceof File) {
+                                          URL.revokeObjectURL(URL.createObjectURL(coverImage))
+                                        }
+                                        handleCoverImageChange(undefined)
+                                      }}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <Upload className="h-8 w-8 text-blue-500 group-hover:text-blue-600 transition-colors" />
+                                    <div className="mt-2">
+                                      <span className="text-sm font-medium text-blue-600">Add a cover image</span>
+                                      <p className="text-xs text-blue-400 mt-1">Supports: JPG, PNG, GIF (Max 10MB)</p>
+                                    </div>
+                                    <Input 
+                                      type="file"
+                                      accept="image/*"
+                                      className="absolute inset-0 cursor-pointer opacity-0"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file && file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
+                                          handleCoverImageChange(file);
+                                        }
+                                      }}
+                                    />
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
@@ -474,6 +615,7 @@ export default function NewProjectPage() {
                         </Popover>
                       </div>
                     </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                       <div className="space-y-8">
                         <FormField
