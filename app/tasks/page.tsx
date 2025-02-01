@@ -130,6 +130,8 @@ export default function TasksPage() {
   const [tasks, setTasks] = React.useState<Task[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [searchQuery, setSearchQuery] = React.useState("")
+  const [statusFilter, setStatusFilter] = React.useState<ProjectStatus | "all">("all")
+  const [isCompletedOpen, setIsCompletedOpen] = React.useState(false)
   const supabase = createClient()
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingTask, setEditingTask] = React.useState<Task | null>(null)
@@ -226,7 +228,13 @@ export default function TasksPage() {
 
   const filteredTasks = React.useMemo(() => {
     return tasks
-      .filter(task => task.status !== 'done') // Filter out completed tasks
+      .filter(task => {
+        // Apply status filter
+        if (statusFilter !== "all") {
+          return task.status === statusFilter;
+        }
+        return true;
+      })
       .filter(task => 
         task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -244,7 +252,7 @@ export default function TasksPage() {
         // If neither has a due date, sort by created date
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
-  }, [tasks, searchQuery])
+  }, [tasks, searchQuery, statusFilter])
 
   const toggleTaskStatus = async (taskId: string, currentStatus: ProjectStatus) => {
     try {
@@ -372,6 +380,15 @@ export default function TasksPage() {
     }
   }
 
+  const handleCardClick = (status: ProjectStatus | "all") => {
+    setStatusFilter(status);
+    if (status === "done") {
+      setIsCompletedOpen(true);
+    } else {
+      setIsCompletedOpen(false);
+    }
+  };
+
   return (
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
@@ -398,66 +415,106 @@ export default function TasksPage() {
           </div>
         </header>
 
-        <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-start py-10 px-4">
+        <main className="flex flex-col items-center justify-start py-10 px-4">
           <div className="w-full max-w-7xl space-y-6">
-            {/* Statistics Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">To Do</CardTitle>
-                  <Circle className="h-4 w-4 text-gray-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{todoCount}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {((todoCount / totalTasks) * 100).toFixed(1)}% of total tasks
-                  </p>
-                </CardContent>
-              </Card>
+            {/* Statistics Cards - Sticky */}
+            <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm pt-4 pb-6">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <button 
+                  onClick={() => handleCardClick("todo")}
+                  className="transition-transform hover:scale-105 focus:outline-none"
+                >
+                  <Card className={cn(
+                    "hover:border-blue-200 hover:shadow-md transition-all",
+                    statusFilter === "todo" && "border-blue-500 shadow-md"
+                  )}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">To Do</CardTitle>
+                      <Circle className="h-4 w-4 text-gray-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[80px]">
+                        <div className="text-2xl font-bold">{todoCount}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {((todoCount / totalTasks) * 100).toFixed(1)}% of total tasks
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-                  <Circle className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{inProgressCount}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {((inProgressCount / totalTasks) * 100).toFixed(1)}% of total tasks
-                  </p>
-                </CardContent>
-              </Card>
+                <button 
+                  onClick={() => handleCardClick("in-progress")}
+                  className="transition-transform hover:scale-105 focus:outline-none"
+                >
+                  <Card className={cn(
+                    "hover:border-blue-200 hover:shadow-md transition-all",
+                    statusFilter === "in-progress" && "border-green-500 shadow-md"
+                  )}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+                      <Circle className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[80px]">
+                        <div className="text-2xl font-bold">{inProgressCount}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {((inProgressCount / totalTasks) * 100).toFixed(1)}% of total tasks
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Done</CardTitle>
-                  <CheckCircle2 className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{doneCount}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {((doneCount / totalTasks) * 100).toFixed(1)}% of total tasks
-                  </p>
-                </CardContent>
-              </Card>
+                <button 
+                  onClick={() => handleCardClick("done")}
+                  className="transition-transform hover:scale-105 focus:outline-none"
+                >
+                  <Card className={cn(
+                    "hover:border-blue-200 hover:shadow-md transition-all",
+                    statusFilter === "done" && "border-red-500 shadow-md"
+                  )}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Done</CardTitle>
+                      <CheckCircle2 className="h-4 w-4 text-red-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[80px]">
+                        <div className="text-2xl font-bold">{doneCount}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {((doneCount / totalTasks) * 100).toFixed(1)}% of total tasks
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Task Distribution</CardTitle>
-                  <ListTodo className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[80px]">
-                    <DynamicPieChart data={pieChartData} />
-                  </div>
-                </CardContent>
-              </Card>
+                <button 
+                  onClick={() => handleCardClick("all")}
+                  className="transition-transform hover:scale-105 focus:outline-none"
+                >
+                  <Card className={cn(
+                    "hover:border-blue-200 hover:shadow-md transition-all",
+                    statusFilter === "all" && "border-blue-500 shadow-md"
+                  )}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Task Distribution</CardTitle>
+                      <ListTodo className="h-4 w-4 text-blue-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[80px]">
+                        <DynamicPieChart data={pieChartData} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
+              </div>
             </div>
 
             {/* Completed Tasks Section */}
             {doneCount > 0 && (
               <div className="rounded-lg border bg-white shadow-sm">
-                <Collapsible>
+                <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
                   <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-red-600" />

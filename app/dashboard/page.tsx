@@ -344,36 +344,38 @@ export default function DashboardPage() {
 
         <div className="flex flex-1 flex-col gap-6 p-6">
           {/* Statistics Section */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {stats.map((stat, index) => {
-              const isClickable = Boolean(stat.href)
-              
-              const cardContent = (
-                <>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      {stat.name}
-                    </CardTitle>
-                    {stat.icon}
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stat.value}</div>
-                  </CardContent>
-                </>
-              )
+          <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm pt-4 pb-6">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {stats.map((stat, index) => {
+                const isClickable = Boolean(stat.href)
+                
+                const cardContent = (
+                  <>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">
+                        {stat.name}
+                      </CardTitle>
+                      {stat.icon}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{stat.value}</div>
+                    </CardContent>
+                  </>
+                )
 
-              return isClickable ? (
-                <Link key={index} href={stat.href!} className="transition-all hover:scale-105">
-                  <Card className="hover:border-blue-200 hover:shadow-md">
+                return isClickable ? (
+                  <Link key={index} href={stat.href!} className="transition-all hover:scale-105">
+                    <Card className="hover:border-blue-200 hover:shadow-md">
+                      {cardContent}
+                    </Card>
+                  </Link>
+                ) : (
+                  <Card key={index}>
                     {cardContent}
                   </Card>
-                </Link>
-              ) : (
-                <Card key={index}>
-                  {cardContent}
-                </Card>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
 
           {/* Charts Section */}
