@@ -344,7 +344,7 @@ export default function DashboardPage() {
 
         <div className="flex flex-1 flex-col gap-6 p-6">
           {/* Statistics Section */}
-          <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm pt-4 pb-6">
+          <div className="sticky top-0 z-30 bg-white backdrop-blur-sm pt-4 pb-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {stats.map((stat, index) => {
                 const isClickable = Boolean(stat.href)

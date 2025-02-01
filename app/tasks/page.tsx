@@ -418,7 +418,7 @@ export default function TasksPage() {
         <main className="flex flex-col items-center justify-start py-10 px-4">
           <div className="w-full max-w-7xl space-y-6">
             {/* Statistics Cards - Sticky */}
-            <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm pt-4 pb-6">
+            <div className="sticky top-0 z-30 bg-white backdrop-blur-sm pt-4 pb-6">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <button 
                   onClick={() => handleCardClick("todo")}

@@ -11,7 +11,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Plus, FolderKanban, CalendarDays, Clock, Tag, Paperclip, Edit2, Trash2, MoreVertical } from "lucide-react"
+import { Plus, FolderKanban, CalendarDays, Clock, Tag, Paperclip, Edit2, Trash2, MoreVertical, Circle, CheckCircle2, ListTodo } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -24,6 +24,8 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import dynamic from "next/dynamic"
 
 type Project = {
   id: string
@@ -47,6 +49,15 @@ type Project = {
     name: string
   } | null
 }
+
+const DynamicPieChart = dynamic(() => import('@/components/charts/task-distribution-chart'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[80px] flex items-center justify-center">
+      <div className="h-[70px] w-[70px] rounded-full border-2 border-t-blue-500 animate-spin" />
+    </div>
+  )
+})
 
 export default function ProjectsPage() {
   const [projects, setProjects] = React.useState<Project[]>([])
@@ -150,6 +161,30 @@ export default function ProjectsPage() {
     router.push(`/projects/new?edit=${projectId}`)
   }
 
+  // Add statistics calculations
+  const todoCount = projects.filter(p => p.status === 'todo').length
+  const inProgressCount = projects.filter(p => p.status === 'in-progress').length
+  const doneCount = projects.filter(p => p.status === 'done').length
+  const totalProjects = projects.length
+
+  const pieChartData = [
+    {
+      name: 'To Do',
+      value: todoCount,
+      color: '#94a3b8'  // gray-400
+    },
+    {
+      name: 'In Progress',
+      value: inProgressCount,
+      color: '#22c55e'  // green-500
+    },
+    {
+      name: 'Done',
+      value: doneCount,
+      color: '#ef4444'  // red-500
+    }
+  ]
+
   return (
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
@@ -179,7 +214,69 @@ export default function ProjectsPage() {
         </header>
 
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-start py-10 px-4">
-          <div className="w-full max-w-7xl space-y-8">
+          <div className="w-full max-w-7xl space-y-6 relative">
+            {/* Statistics Cards */}
+            <div className="sticky top-0 z-30 bg-white backdrop-blur-sm pt-4 pb-6">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="hover:border-blue-200 hover:shadow-md transition-all">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">To Do</CardTitle>
+                    <Circle className="h-4 w-4 text-gray-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[80px]">
+                      <div className="text-2xl font-bold">{todoCount}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {((todoCount / totalProjects) * 100).toFixed(1)}% of total projects
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="hover:border-blue-200 hover:shadow-md transition-all">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+                    <Circle className="h-4 w-4 text-green-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[80px]">
+                      <div className="text-2xl font-bold">{inProgressCount}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {((inProgressCount / totalProjects) * 100).toFixed(1)}% of total projects
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="hover:border-blue-200 hover:shadow-md transition-all">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Done</CardTitle>
+                    <CheckCircle2 className="h-4 w-4 text-red-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[80px]">
+                      <div className="text-2xl font-bold">{doneCount}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {((doneCount / totalProjects) * 100).toFixed(1)}% of total projects
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="hover:border-blue-200 hover:shadow-md transition-all">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Project Distribution</CardTitle>
+                    <ListTodo className="h-4 w-4 text-blue-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[80px]">
+                      <DynamicPieChart data={pieChartData} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
             {isLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(6)].map((_, i) => (

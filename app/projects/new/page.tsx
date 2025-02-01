@@ -664,7 +664,7 @@ export default function NewProjectPage() {
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-base font-semibold">Status</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value}>
                                   <FormControl>
                                     <SelectTrigger className="h-12 text-base transition-colors hover:border-blue-200 focus:border-blue-400">
                                       <SelectValue placeholder="Select status" />
