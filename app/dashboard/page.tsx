@@ -65,11 +65,7 @@ const calculateStats = (projects: Project[]) => {
   today.setHours(0, 0, 0, 0)
 
   const activeProjects = projects.filter(p => p.status === "todo" || p.status === "in-progress").length
-  const dueToday = projects.filter(p => {
-    const dueDate = new Date(p.due_date)
-    dueDate.setHours(0, 0, 0, 0)
-    return dueDate.getTime() === today.getTime()
-  }).length
+  const tasksToday = "5" // This should be replaced with actual tasks count once we implement tasks
   const completedProjects = projects.filter(p => p.status === "done").length
 
   return [
@@ -77,21 +73,24 @@ const calculateStats = (projects: Project[]) => {
       name: "Active Projects",
       value: activeProjects.toString(),
       icon: <ListTodo className="h-4 w-4 text-muted-foreground" />,
+      href: "/projects?filter=active"
     },
     {
       name: "Tasks Due Today",
-      value: dueToday.toString(),
+      value: tasksToday,
       icon: <CalendarCheck className="h-4 w-4 text-muted-foreground" />,
+      href: "/tasks?filter=due-today"
     },
     {
       name: "Team Members",
       value: "5",
-      icon: <Users className="h-4 w-4 text-muted-foreground" />,
+      icon: <Users className="h-4 w-4 text-muted-foreground" />
     },
     {
       name: "Completed Projects",
       value: completedProjects.toString(),
       icon: <ListTodo className="h-4 w-4 text-muted-foreground" />,
+      href: "/projects?filter=completed"
     },
   ]
 }
@@ -347,12 +346,7 @@ export default function DashboardPage() {
           {/* Statistics Section */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {stats.map((stat, index) => {
-              const isClickable = stat.name === "Active Projects" || stat.name === "Completed Projects"
-              const href = stat.name === "Active Projects" 
-                ? "/projects?filter=active" 
-                : stat.name === "Completed Projects" 
-                  ? "/projects?filter=completed" 
-                  : undefined
+              const isClickable = Boolean(stat.href)
               
               const cardContent = (
                 <>
@@ -369,7 +363,7 @@ export default function DashboardPage() {
               )
 
               return isClickable ? (
-                <Link key={index} href={href!} className="transition-all hover:scale-105">
+                <Link key={index} href={stat.href!} className="transition-all hover:scale-105">
                   <Card className="hover:border-blue-200 hover:shadow-md">
                     {cardContent}
                   </Card>
