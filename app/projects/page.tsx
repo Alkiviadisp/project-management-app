@@ -11,7 +11,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Plus, FolderKanban, CalendarDays, Clock, Tag, Paperclip, Edit2, Trash2, MoreVertical, Circle, CheckCircle2, ListTodo } from "lucide-react"
+import { Plus, FolderKanban, CalendarDays, Clock, Tag, Paperclip, Edit2, Trash2, MoreVertical, Circle, CheckCircle2, ListTodo, ChevronDown } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -26,6 +26,11 @@ import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import dynamic from "next/dynamic"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 type Project = {
   id: string
@@ -66,6 +71,8 @@ export default function ProjectsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const filterParam = searchParams.get('filter')
+  const [statusFilter, setStatusFilter] = React.useState<Project['status'] | "all">("all")
+  const [isCompletedOpen, setIsCompletedOpen] = React.useState(false)
 
   React.useEffect(() => {
     async function fetchProjects() {
@@ -185,6 +192,26 @@ export default function ProjectsPage() {
     }
   ]
 
+  const handleCardClick = (status: Project['status'] | "all") => {
+    setStatusFilter(status);
+    if (status === "done") {
+      setIsCompletedOpen(true);
+    } else {
+      setIsCompletedOpen(false);
+    }
+  };
+
+  const filteredProjects = React.useMemo(() => {
+    return projects
+      .filter(project => {
+        if (statusFilter !== "all") {
+          return project.status === statusFilter;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [projects, statusFilter])
+
   return (
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
@@ -218,64 +245,191 @@ export default function ProjectsPage() {
             {/* Statistics Cards */}
             <div className="sticky top-0 z-30 bg-white backdrop-blur-sm pt-4 pb-6">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="hover:border-blue-200 hover:shadow-md transition-all">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">To Do</CardTitle>
-                    <Circle className="h-4 w-4 text-gray-600" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[80px]">
-                      <div className="text-2xl font-bold">{todoCount}</div>
-                      <p className="text-xs text-muted-foreground">
-                        {((todoCount / totalProjects) * 100).toFixed(1)}% of total projects
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+                <button 
+                  onClick={() => handleCardClick("todo")}
+                  className="transition-transform hover:scale-105 focus:outline-none"
+                >
+                  <Card className={cn(
+                    "hover:border-blue-200 hover:shadow-md transition-all",
+                    statusFilter === "todo" && "border-blue-500 shadow-md"
+                  )}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">To Do</CardTitle>
+                      <Circle className="h-4 w-4 text-gray-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[80px]">
+                        <div className="text-2xl font-bold">{todoCount}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {((todoCount / totalProjects) * 100).toFixed(1)}% of total projects
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
 
-                <Card className="hover:border-blue-200 hover:shadow-md transition-all">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-                    <Circle className="h-4 w-4 text-green-600" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[80px]">
-                      <div className="text-2xl font-bold">{inProgressCount}</div>
-                      <p className="text-xs text-muted-foreground">
-                        {((inProgressCount / totalProjects) * 100).toFixed(1)}% of total projects
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+                <button 
+                  onClick={() => handleCardClick("in-progress")}
+                  className="transition-transform hover:scale-105 focus:outline-none"
+                >
+                  <Card className={cn(
+                    "hover:border-blue-200 hover:shadow-md transition-all",
+                    statusFilter === "in-progress" && "border-green-500 shadow-md"
+                  )}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+                      <Circle className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[80px]">
+                        <div className="text-2xl font-bold">{inProgressCount}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {((inProgressCount / totalProjects) * 100).toFixed(1)}% of total projects
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
 
-                <Card className="hover:border-blue-200 hover:shadow-md transition-all">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Done</CardTitle>
-                    <CheckCircle2 className="h-4 w-4 text-red-600" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[80px]">
-                      <div className="text-2xl font-bold">{doneCount}</div>
-                      <p className="text-xs text-muted-foreground">
-                        {((doneCount / totalProjects) * 100).toFixed(1)}% of total projects
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+                <button 
+                  onClick={() => handleCardClick("done")}
+                  className="transition-transform hover:scale-105 focus:outline-none"
+                >
+                  <Card className={cn(
+                    "hover:border-blue-200 hover:shadow-md transition-all",
+                    statusFilter === "done" && "border-red-500 shadow-md"
+                  )}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Done</CardTitle>
+                      <CheckCircle2 className="h-4 w-4 text-red-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[80px]">
+                        <div className="text-2xl font-bold">{doneCount}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {((doneCount / totalProjects) * 100).toFixed(1)}% of total projects
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
 
-                <Card className="hover:border-blue-200 hover:shadow-md transition-all">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Project Distribution</CardTitle>
-                    <ListTodo className="h-4 w-4 text-blue-600" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[80px]">
-                      <DynamicPieChart data={pieChartData} />
-                    </div>
-                  </CardContent>
-                </Card>
+                <button 
+                  onClick={() => handleCardClick("all")}
+                  className="transition-transform hover:scale-105 focus:outline-none"
+                >
+                  <Card className={cn(
+                    "hover:border-blue-200 hover:shadow-md transition-all",
+                    statusFilter === "all" && "border-blue-500 shadow-md"
+                  )}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Project Distribution</CardTitle>
+                      <ListTodo className="h-4 w-4 text-blue-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[80px]">
+                        <DynamicPieChart data={pieChartData} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
               </div>
             </div>
+
+            {/* Completed Projects Section */}
+            {doneCount > 0 && (
+              <div className="rounded-lg border bg-white shadow-sm">
+                <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-red-600" />
+                      <span>Completed Projects</span>
+                      <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
+                        {doneCount}
+                      </Badge>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="divide-y border-t">
+                      {filteredProjects
+                        .filter(project => project.status === 'done')
+                        .map((project) => (
+                          <div
+                            key={project.id}
+                            className="group flex items-center gap-3 bg-red-50/50 px-4 py-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-sm font-medium text-gray-900">
+                                    {project.title}
+                                  </h3>
+                                  <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getPriorityColor(project.priority))}>
+                                    {project.priority}
+                                  </Badge>
+                                  {project.tags.length > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      {project.tags.map((tag, index) => (
+                                        <Badge
+                                          key={index}
+                                          variant="secondary"
+                                          className="px-1.5 py-0 text-xs bg-gray-100 text-gray-700"
+                                        >
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <CalendarDays className="h-3 w-3" />
+                                    <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        handleEditProject(project.id)
+                                      }}
+                                      className="h-7 w-7 hover:bg-white/80 hover:text-blue-600"
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        if (window.confirm('Are you sure you want to delete this project?')) {
+                                          handleDeleteProject(project.id)
+                                        }
+                                      }}
+                                      className="h-7 w-7 hover:bg-white/80 hover:text-red-600"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                              {project.description && (
+                                <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
+                                  {project.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
 
             {isLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -286,7 +440,7 @@ export default function ProjectsPage() {
                   />
                 ))}
               </div>
-            ) : projects.length === 0 ? (
+            ) : filteredProjects.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
                   <FolderKanban className="h-6 w-6 text-blue-600" />
@@ -307,145 +461,146 @@ export default function ProjectsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {projects.map((project) => {
-                  const colors = getCardColors(project.color)
-
-                  return (
-                    <div
-                      key={project.id}
-                      className={cn(
-                        "group relative overflow-hidden rounded-lg border transition-all hover:shadow-md",
-                        colors.bg,
-                        colors.border,
-                        colors.hover
-                      )}
-                    >
-                      <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            handleEditProject(project.id)
-                          }}
-                          className="h-7 w-7 bg-white/80 hover:bg-white shadow-sm hover:text-blue-600"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            if (window.confirm('Are you sure you want to delete this project?')) {
-                              handleDeleteProject(project.id)
-                            }
-                          }}
-                          className="h-7 w-7 bg-white/80 hover:bg-white shadow-sm hover:text-red-600"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-
-                      <div className="aspect-[3/2] w-full overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
-                        {project.cover_image ? (
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <img
-                                src={project.cover_image.url}
-                                alt={project.cover_image.name}
-                                className="h-full w-full object-cover transition-transform duration-300 hover:scale-105 cursor-zoom-in"
-                              />
-                            </DialogTrigger>
-                            <DialogContent className="max-w-3xl">
-                              <DialogHeader>
-                                <DialogTitle>{project.title}</DialogTitle>
-                                <DialogDescription>Project Cover Image</DialogDescription>
-                              </DialogHeader>
-                              <img
-                                src={project.cover_image.url}
-                                alt={project.cover_image.name}
-                                className="w-full rounded-lg"
-                              />
-                            </DialogContent>
-                          </Dialog>
-                        ) : (
-                          <div className={cn("h-full w-full relative overflow-hidden", project.color)}>
-                            <img
-                              src="https://images.unsplash.com/photo-1557683311-eac922347aa1?q=80&w=1000&auto=format&fit=crop"
-                              alt="Default project image"
-                              className="h-full w-full object-cover opacity-20"
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <FolderKanban className="h-8 w-8 text-white/90" />
-                            </div>
-                          </div>
+                {filteredProjects
+                  .filter(project => project.status !== 'done')
+                  .map((project) => {
+                    const colors = getCardColors(project.color)
+                    return (
+                      <div
+                        key={project.id}
+                        className={cn(
+                          "group relative overflow-hidden rounded-lg border transition-all hover:shadow-md",
+                          colors.bg,
+                          colors.border,
+                          colors.hover
                         )}
-                      </div>
-
-                      <div className="p-3">
-                        <div className="space-y-3">
-                          <div className="space-y-1">
-                            <h3 className="text-base font-semibold line-clamp-1 text-gray-900">
-                              {project.title}
-                            </h3>
-                            <p className="text-xs text-muted-foreground line-clamp-2">
-                            {project.description}
-                          </p>
+                      >
+                        <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleEditProject(project.id)
+                            }}
+                            className="h-7 w-7 bg-white/80 hover:bg-white shadow-sm hover:text-blue-600"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              if (window.confirm('Are you sure you want to delete this project?')) {
+                                handleDeleteProject(project.id)
+                              }
+                            }}
+                            className="h-7 w-7 bg-white/80 hover:bg-white shadow-sm hover:text-red-600"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
 
-                          <div className="flex flex-wrap gap-1.5">
-                            <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(project.status))}>
-                            {project.status.replace('-', ' ')}
-                          </Badge>
-                            <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getPriorityColor(project.priority))}>
-                            {project.priority}
-                          </Badge>
-                        </div>
-
-                          <div className="space-y-2 pt-1">
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <CalendarDays className="h-3 w-3" />
-                            <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
-                          </div>
-                          {project.tags.length > 0 && (
-                              <div className="flex items-center gap-1.5">
-                                <Tag className="h-3 w-3 text-muted-foreground" />
-                              <div className="flex flex-wrap gap-1">
-                                {project.tags.map((tag, index) => (
-                                  <Badge
-                                    key={index}
-                                    variant="secondary"
-                                      className={cn("px-1.5 py-0 text-xs", colors.bg, colors.text)}
-                                  >
-                                    {tag}
-                                  </Badge>
-                                ))}
-
+                        <div className="aspect-[3/2] w-full overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
+                          {project.cover_image ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <img
+                                  src={project.cover_image.url}
+                                  alt={project.cover_image.name}
+                                  className="h-full w-full object-cover transition-transform duration-300 hover:scale-105 cursor-zoom-in"
+                                />
+                              </DialogTrigger>
+                              <DialogContent className="max-w-3xl">
+                                <DialogHeader>
+                                  <DialogTitle>{project.title}</DialogTitle>
+                                  <DialogDescription>Project Cover Image</DialogDescription>
+                                </DialogHeader>
+                                <img
+                                  src={project.cover_image.url}
+                                  alt={project.cover_image.name}
+                                  className="w-full rounded-lg"
+                                />
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <div className={cn("h-full w-full relative overflow-hidden", project.color)}>
+                              <img
+                                src="https://images.unsplash.com/photo-1557683311-eac922347aa1?q=80&w=1000&auto=format&fit=crop"
+                                alt="Default project image"
+                                className="h-full w-full object-cover opacity-20"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <FolderKanban className="h-8 w-8 text-white/90" />
                               </div>
-
                             </div>
                           )}
-                            {project.attachments.length > 1 && (
+                        </div>
+
+                        <div className="p-3">
+                          <div className="space-y-3">
+                            <div className="space-y-1">
+                              <h3 className="text-base font-semibold line-clamp-1 text-gray-900">
+                                {project.title}
+                              </h3>
+                              <p className="text-xs text-muted-foreground line-clamp-2">
+                              {project.description}
+                            </p>
+                          </div>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(project.status))}>
+                              {project.status.replace('-', ' ')}
+                            </Badge>
+                              <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getPriorityColor(project.priority))}>
+                              {project.priority}
+                            </Badge>
+                          </div>
+
+                            <div className="space-y-2 pt-1">
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Paperclip className="h-3 w-3" />
-                                <span>{project.attachments.length} attachments</span>
+                                <CalendarDays className="h-3 w-3" />
+                              <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                            </div>
+                            {project.tags.length > 0 && (
+                                <div className="flex items-center gap-1.5">
+                                  <Tag className="h-3 w-3 text-muted-foreground" />
+                                <div className="flex flex-wrap gap-1">
+                                  {project.tags.map((tag, index) => (
+                                    <Badge
+                                      key={index}
+                                      variant="secondary"
+                                        className={cn("px-1.5 py-0 text-xs", colors.bg, colors.text)}
+                                    >
+                                      {tag}
+                                    </Badge>
+                                  ))}
+
+                                </div>
+
                               </div>
                             )}
+                              {project.attachments.length > 1 && (
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <Paperclip className="h-3 w-3" />
+                                  <span>{project.attachments.length} attachments</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        <Link 
+                          href={`/projects/${project.id}`} 
+                          className="absolute inset-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                          <span className="sr-only">View project</span>
+                        </Link>
                       </div>
-                      <Link 
-                        href={`/projects/${project.id}`} 
-                        className="absolute inset-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                      >
-                        <span className="sr-only">View project</span>
-                      </Link>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
               </div>
             )}
           </div>
