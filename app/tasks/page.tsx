@@ -17,7 +17,8 @@ import {
   Pencil,
   Trash2,
   Plus,
-  ChevronDown
+  ChevronDown,
+  RotateCcw
 } from "lucide-react"
 import {
   SidebarInset,
@@ -70,6 +71,18 @@ import { Calendar } from "@/components/ui/calendar"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+} from "@dnd-kit/core"
+import { restrictToWindowEdges } from "@dnd-kit/modifiers"
 
 type ProjectStatus = 'todo' | 'in-progress' | 'done'
 
@@ -136,6 +149,14 @@ export default function TasksPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingTask, setEditingTask] = React.useState<Task | null>(null)
   const [isCreatingTask, setIsCreatingTask] = React.useState(false)
+  const [activeTask, setActiveTask] = React.useState<Task | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  )
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
@@ -389,6 +410,51 @@ export default function TasksPage() {
     }
   };
 
+  // Add this function to handle drag end
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    
+    if (!over) return
+
+    const taskId = active.id as string
+    const newStatus = over.id as "todo" | "in-progress" | "done"
+    const task = tasks.find(t => t.id === taskId)
+    
+    if (!task || task.status === newStatus) return
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("User not found")
+
+      // Update task using raw SQL to ensure proper enum handling
+      const { error: updateError } = await supabase
+        .rpc('update_task_status', {
+          p_task_id: taskId,
+          p_user_id: user.id,
+          p_status: newStatus
+        })
+
+      if (updateError) throw updateError
+
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, status: newStatus } : t
+      ))
+
+      toast.success(`Task moved to ${newStatus.replace('-', ' ')}`)
+    } catch (error) {
+      console.error('Error updating task:', error)
+      toast.error("Failed to update task status")
+    }
+
+    setActiveTask(null)
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const taskId = event.active.id as string
+    const task = tasks.find(t => t.id === taskId)
+    if (task) setActiveTask(task)
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
@@ -417,379 +483,246 @@ export default function TasksPage() {
 
         <main className="flex flex-col items-center justify-start py-10 px-4">
           <div className="w-full max-w-7xl space-y-6">
-            {/* Statistics Cards - Sticky */}
-            <div className="sticky top-0 z-30 bg-white backdrop-blur-sm pt-4 pb-6">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <button 
-                  onClick={() => handleCardClick("todo")}
-                  className="transition-transform hover:scale-105 focus:outline-none"
-                >
-                  <Card className={cn(
-                    "hover:border-blue-200 hover:shadow-md transition-all",
-                    statusFilter === "todo" && "border-blue-500 shadow-md"
-                  )}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">To Do</CardTitle>
-                      <Circle className="h-4 w-4 text-gray-600" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-[80px]">
-                        <div className="text-2xl font-bold">{todoCount}</div>
-                        <p className="text-xs text-muted-foreground">
-                          {((todoCount / totalTasks) * 100).toFixed(1)}% of total tasks
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </button>
+            <DndContext
+              sensors={sensors}
+              onDragEnd={handleDragEnd}
+              onDragStart={handleDragStart}
+              modifiers={[restrictToWindowEdges]}
+            >
+              {/* Statistics Cards and Done Drop Zone - Sticky */}
+              <div className="sticky top-0 z-30">
+                <div className="bg-white backdrop-blur-sm pt-4 pb-6 space-y-6">
+                  {/* Statistics Cards */}
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <button 
+                      onClick={() => handleCardClick("todo")}
+                      className="transition-transform hover:scale-105 focus:outline-none"
+                    >
+                      <Card className={cn(
+                        "hover:border-blue-200 hover:shadow-md transition-all",
+                        statusFilter === "todo" && "border-blue-500 shadow-md"
+                      )}>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">To Do</CardTitle>
+                          <Circle className="h-4 w-4 text-gray-600" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[80px]">
+                            <div className="text-2xl font-bold">{todoCount}</div>
+                            <p className="text-xs text-muted-foreground">
+                              {((todoCount / totalTasks) * 100).toFixed(1)}% of total tasks
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
 
-                <button 
-                  onClick={() => handleCardClick("in-progress")}
-                  className="transition-transform hover:scale-105 focus:outline-none"
-                >
-                  <Card className={cn(
-                    "hover:border-blue-200 hover:shadow-md transition-all",
-                    statusFilter === "in-progress" && "border-green-500 shadow-md"
-                  )}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-                      <Circle className="h-4 w-4 text-green-600" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-[80px]">
-                        <div className="text-2xl font-bold">{inProgressCount}</div>
-                        <p className="text-xs text-muted-foreground">
-                          {((inProgressCount / totalTasks) * 100).toFixed(1)}% of total tasks
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </button>
+                    <button 
+                      onClick={() => handleCardClick("in-progress")}
+                      className="transition-transform hover:scale-105 focus:outline-none"
+                    >
+                      <Card className={cn(
+                        "hover:border-blue-200 hover:shadow-md transition-all",
+                        statusFilter === "in-progress" && "border-green-500 shadow-md"
+                      )}>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+                          <Circle className="h-4 w-4 text-green-600" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[80px]">
+                            <div className="text-2xl font-bold">{inProgressCount}</div>
+                            <p className="text-xs text-muted-foreground">
+                              {((inProgressCount / totalTasks) * 100).toFixed(1)}% of total tasks
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
 
-                <button 
-                  onClick={() => handleCardClick("done")}
-                  className="transition-transform hover:scale-105 focus:outline-none"
-                >
-                  <Card className={cn(
-                    "hover:border-blue-200 hover:shadow-md transition-all",
-                    statusFilter === "done" && "border-red-500 shadow-md"
-                  )}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Done</CardTitle>
-                      <CheckCircle2 className="h-4 w-4 text-red-600" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-[80px]">
-                        <div className="text-2xl font-bold">{doneCount}</div>
-                        <p className="text-xs text-muted-foreground">
-                          {((doneCount / totalTasks) * 100).toFixed(1)}% of total tasks
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </button>
+                    <button 
+                      onClick={() => handleCardClick("done")}
+                      className="transition-transform hover:scale-105 focus:outline-none"
+                    >
+                      <Card className={cn(
+                        "hover:border-blue-200 hover:shadow-md transition-all",
+                        statusFilter === "done" && "border-red-500 shadow-md"
+                      )}>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Done</CardTitle>
+                          <CheckCircle2 className="h-4 w-4 text-red-600" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[80px]">
+                            <div className="text-2xl font-bold">{doneCount}</div>
+                            <p className="text-xs text-muted-foreground">
+                              {((doneCount / totalTasks) * 100).toFixed(1)}% of total tasks
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
 
-                <button 
-                  onClick={() => handleCardClick("all")}
-                  className="transition-transform hover:scale-105 focus:outline-none"
-                >
-                  <Card className={cn(
-                    "hover:border-blue-200 hover:shadow-md transition-all",
-                    statusFilter === "all" && "border-blue-500 shadow-md"
-                  )}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Task Distribution</CardTitle>
-                      <ListTodo className="h-4 w-4 text-blue-600" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-[80px]">
-                        <DynamicPieChart data={pieChartData} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </button>
-              </div>
-            </div>
+                    <button 
+                      onClick={() => handleCardClick("all")}
+                      className="transition-transform hover:scale-105 focus:outline-none"
+                    >
+                      <Card className={cn(
+                        "hover:border-blue-200 hover:shadow-md transition-all",
+                        statusFilter === "all" && "border-blue-500 shadow-md"
+                      )}>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Task Distribution</CardTitle>
+                          <ListTodo className="h-4 w-4 text-blue-600" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[80px]">
+                            <DynamicPieChart data={pieChartData} />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
+                  </div>
 
-            {/* Completed Tasks Section */}
-            {doneCount > 0 && (
-              <div className="rounded-lg border bg-white shadow-sm">
-                <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-red-600" />
-                      <span>Completed Tasks</span>
-                      <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
-                        {doneCount}
-                      </Badge>
+                  {/* Done Drop Zone */}
+                  <DroppableColumn 
+                    id="done" 
+                    title=""
+                    className="h-16 border-2 border-dashed border-red-200 bg-red-50/50 rounded-lg flex items-center justify-center"
+                  >
+                    <div className="flex items-center gap-2 text-red-500">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <p className="text-sm">Drop here to mark as done</p>
                     </div>
-                    <ChevronDown className="h-4 w-4 text-gray-500" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="divide-y border-t">
-                      {tasks
-                        .filter(task => task.status === 'done')
-                        .map((task) => (
-                          <div
-                            key={task.id}
-                            className="group flex items-center gap-3 bg-red-50/50 px-4 py-3"
-                          >
-                            <button
-                              onClick={() => toggleTaskStatus(task.id, task.status)}
-                              className="flex-shrink-0 transition-transform hover:scale-110"
+                  </DroppableColumn>
+                </div>
+              </div>
+
+              {/* Completed Tasks Section */}
+              {doneCount > 0 && (
+                <div className="rounded-lg border bg-white shadow-sm">
+                  <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
+                    <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-red-600" />
+                        <span>Completed Tasks</span>
+                        <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
+                          {doneCount}
+                        </Badge>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="divide-y border-t">
+                        {tasks
+                          .filter(task => task.status === 'done')
+                          .map((task) => (
+                            <div
+                              key={task.id}
+                              className="group flex items-center gap-3 bg-red-50/50 px-4 py-3"
                             >
-                              <CheckCircle2 className="h-4 w-4 text-red-600" />
-                            </button>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-gray-900">{task.title}</p>
-                              <div className="flex items-center gap-3 text-xs text-gray-500">
-                                <Link
-                                  href={`/projects/${task.project_id}`}
-                                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                              <button
+                                onClick={() => toggleTaskStatus(task.id, task.status)}
+                                className="flex-shrink-0 transition-transform hover:scale-110"
+                              >
+                                <CheckCircle2 className="h-4 w-4 text-red-600" />
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-gray-900">{task.title}</p>
+                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <Link
+                                    href={`/projects/${task.project_id}`}
+                                    className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                                  >
+                                    <FolderKanban className="h-3 w-3" />
+                                    {task.project.title}
+                                  </Link>
+                                  {task.due_date && (
+                                    <span className="flex items-center gap-1">
+                                      <CalendarDays className="h-3 w-3" />
+                                      Due {format(new Date(task.due_date), 'MMM d')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const { data: { user } } = await supabase.auth.getUser()
+                                      if (!user) throw new Error("User not found")
+
+                                      const { error: updateError } = await supabase
+                                        .rpc('update_task_status', {
+                                          p_task_id: task.id,
+                                          p_user_id: user.id,
+                                          p_status: 'in-progress'
+                                        })
+
+                                      if (updateError) throw updateError
+
+                                      setTasks(prev => prev.map(t => 
+                                        t.id === task.id ? { ...t, status: 'in-progress' } : t
+                                      ))
+
+                                      toast.success("Task moved back to in progress")
+                                    } catch (error) {
+                                      console.error('Error updating task:', error)
+                                      toast.error("Failed to update task status")
+                                    }
+                                  }}
+                                  className="flex-shrink-0 transition-transform hover:scale-110"
+                                  title="Return to In Progress"
                                 >
-                                  <FolderKanban className="h-3 w-3" />
-                                  {task.project.title}
-                                </Link>
-                                {task.due_date && (
-                                  <span className="flex items-center gap-1">
-                                    <CalendarDays className="h-3 w-3" />
-                                    Due {format(new Date(task.due_date), 'MMM d')}
-                                  </span>
-                                )}
+                                  <RotateCcw className="h-4 w-4 text-green-600 hover:text-green-700" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (window.confirm('Are you sure you want to delete this task?')) {
+                                      deleteTask(task.id)
+                                    }
+                                  }}
+                                  className="flex-shrink-0"
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600 hover:text-red-700" />
+                                </button>
                               </div>
                             </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (window.confirm('Are you sure you want to delete this task?')) {
-                                  deleteTask(task.id)
-                                }
-                              }}
-                              className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600 hover:text-red-700" />
-                            </button>
-                          </div>
-                        ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
-
-            {isLoading ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="space-y-4">
-                    <div className="h-10 w-32 rounded-lg bg-gray-100 animate-pulse" />
-                    {[...Array(2)].map((_, j) => (
-                      <div
-                        key={j}
-                        className="h-32 rounded-xl border bg-white/50 animate-pulse"
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : filteredTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
-                  <ListTodo className="h-6 w-6 text-blue-600" />
+                          ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </div>
-                <h3 className="mt-4 text-lg font-semibold">No tasks found</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {searchQuery ? "Try adjusting your search query" : "Create your first task to get started"}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* To Do Column */}
-                <div className="space-y-4">
-                  <div className="sticky top-0 flex items-center gap-2 px-2 py-2 bg-white/80 backdrop-blur-sm z-10">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-gray-100">
-                      <Circle className="h-4 w-4 text-gray-600" />
-                    </div>
-                    <h2 className="text-sm font-medium text-gray-600">To Do</h2>
-                    <Badge variant="secondary" className="ml-auto bg-gray-100 text-gray-600">
-                      {filteredTasks.filter(t => t.status === 'todo').length}
-                    </Badge>
-                  </div>
-                  <div className="space-y-3">
+              )}
+
+              {/* Main Task Columns */}
+              {!isLoading && filteredTasks.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* To Do Column */}
+                  <DroppableColumn id="todo" title="To Do">
                     {filteredTasks
                       .filter(task => task.status === 'todo')
                       .map((task) => (
-                        <div
-                          key={task.id}
-                          className="group relative overflow-hidden rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100"
-                        >
-                          {/* Task content */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                          
-                          {/* Action Buttons */}
-                          <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                setEditingTask(task)
-                                setIsDialogOpen(true)
-                              }}
-                              className="h-8 w-8 bg-white/80 hover:bg-blue-50 border border-transparent hover:border-blue-100"
-                            >
-                              <Pencil className="h-4 w-4 text-blue-600" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                if (window.confirm('Are you sure you want to delete this task?')) {
-                                  deleteTask(task.id)
-                                }
-                              }}
-                              className="h-8 w-8 bg-white/80 hover:bg-red-50 border border-transparent hover:border-red-100"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
-                          </div>
+                        <TaskCard key={task.id} task={task} />
+                      ))}
+                  </DroppableColumn>
 
-                          <div className="relative flex items-start gap-4">
-                            <button
-                              onClick={() => toggleTaskStatus(task.id, task.status)}
-                              className="mt-1 flex-shrink-0 transition-transform hover:scale-110"
-                            >
-                              <Circle className="h-5 w-5 text-gray-400 hover:text-blue-500" />
-                            </button>
-                            <div className="flex-grow min-w-0">
-                              <h3 className="text-base font-medium text-gray-900 truncate">
-                                {task.title}
-                              </h3>
-                              {task.description && (
-                                <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                                  {task.description}
-                                </p>
-                              )}
-                              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                                <Link
-                                  href={`/projects/${task.project_id}`}
-                                  className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md hover:bg-blue-50 transition-colors border border-gray-100"
-                                >
-                                  <FolderKanban className="h-3.5 w-3.5" />
-                                  {task.project.title}
-                                </Link>
-                                {task.due_date && (
-                                  <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md border border-gray-100">
-                                    <CalendarDays className="h-3.5 w-3.5 text-gray-500" />
-                                    <span className="text-gray-600">
-                                      Due {format(new Date(task.due_date), 'MMM d')}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* In Progress Column */}
-                <div className="space-y-4">
-                  <div className="sticky top-0 flex items-center gap-2 px-2 py-2 bg-white/80 backdrop-blur-sm z-10">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-green-100">
-                      <Circle className="h-4 w-4 text-green-600" />
-                    </div>
-                    <h2 className="text-sm font-medium text-gray-600">In Progress</h2>
-                    <Badge variant="secondary" className="ml-auto bg-green-100 text-green-600">
-                      {filteredTasks.filter(t => t.status === 'in-progress').length}
-                    </Badge>
-                  </div>
-                  <div className="space-y-3">
+                  {/* In Progress Column */}
+                  <DroppableColumn id="in-progress" title="In Progress">
                     {filteredTasks
                       .filter(task => task.status === 'in-progress')
                       .map((task) => (
-                        <div
-                          key={task.id}
-                          className="group relative overflow-hidden rounded-xl border bg-green-50 p-5 shadow-sm transition-all hover:shadow-md hover:border-green-100"
-                        >
-                          {/* Task content */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-green-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                          
-                          {/* Action Buttons */}
-                          <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                setEditingTask(task)
-                                setIsDialogOpen(true)
-                              }}
-                              className="h-8 w-8 bg-white/80 hover:bg-blue-50 border border-transparent hover:border-blue-100"
-                            >
-                              <Pencil className="h-4 w-4 text-blue-600" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                if (window.confirm('Are you sure you want to delete this task?')) {
-                                  deleteTask(task.id)
-                                }
-                              }}
-                              className="h-8 w-8 bg-white/80 hover:bg-red-50 border border-transparent hover:border-red-100"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
-                          </div>
-
-                          <div className="relative flex items-start gap-4">
-                            <button
-                              onClick={() => toggleTaskStatus(task.id, task.status)}
-                              className="mt-1 flex-shrink-0 transition-transform hover:scale-110"
-                            >
-                              <Circle className="h-5 w-5 text-green-500" />
-                            </button>
-                            <div className="flex-grow min-w-0">
-                              <h3 className="text-base font-medium text-gray-900 truncate">
-                                {task.title}
-                              </h3>
-                              {task.description && (
-                                <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                                  {task.description}
-                                </p>
-                              )}
-                              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                                <Link
-                                  href={`/projects/${task.project_id}`}
-                                  className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md hover:bg-blue-50 transition-colors border border-gray-100"
-                                >
-                                  <FolderKanban className="h-3.5 w-3.5" />
-                                  {task.project.title}
-                                </Link>
-                                {task.due_date && (
-                                  <div className="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md border border-gray-100">
-                                    <CalendarDays className="h-3.5 w-3.5 text-gray-500" />
-                                    <span className="text-gray-600">
-                                      Due {format(new Date(task.due_date), 'MMM d')}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                    ))}
-                  </div>
+                        <TaskCard key={task.id} task={task} />
+                      ))}
+                  </DroppableColumn>
                 </div>
-              </div>
-            )}
+              )}
+
+              <DragOverlay>
+                {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
+              </DragOverlay>
+            </DndContext>
           </div>
         </main>
       </SidebarInset>
@@ -910,5 +843,98 @@ export default function TasksPage() {
         </DialogContent>
       </Dialog>
     </SidebarProvider>
+  )
+}
+
+// Add this function to get the status color
+function getStatusColor(status: ProjectStatus) {
+  switch (status) {
+    case 'todo':
+      return 'bg-gray-100 text-gray-800'
+    case 'in-progress':
+      return 'bg-green-100 text-green-800'
+    case 'done':
+      return 'bg-red-100 text-red-800'
+    default:
+      return 'bg-gray-100 text-gray-800'
+  }
+}
+
+// Add this new component for the task card
+function TaskCard({ task, isDragging }: { task: Task; isDragging?: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging: isBeingDragged } = useDraggable({
+    id: task.id,
+    data: task,
+  })
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    opacity: isBeingDragged ? 0 : 1
+  } : undefined
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={cn(
+        "group relative rounded-lg border bg-white p-4 shadow-sm transition-all hover:shadow touch-none",
+        isDragging && "shadow-lg cursor-grabbing",
+        !isDragging && "cursor-grab"
+      )}
+    >
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">{task.title}</h3>
+          <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(task.status))}>
+            {task.status.replace('-', ' ')}
+          </Badge>
+        </div>
+        {task.description && (
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {task.description}
+          </p>
+        )}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <CalendarDays className="h-3 w-3" />
+            <span>Due {task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : 'No date'}</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <FolderKanban className="h-3 w-3" />
+            <span>{task.project.title}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DroppableColumn({ id, title, children, className }: { 
+  id: string; 
+  title: string; 
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { setNodeRef } = useDroppable({ id })
+  const isMainColumn = id === 'todo' || id === 'in-progress'
+
+  return (
+    <div className="space-y-4">
+      {title && <h2 className="text-lg font-semibold">{title}</h2>}
+      <div 
+        ref={setNodeRef} 
+        className={cn(
+          "space-y-4",
+          isMainColumn && "p-4 rounded-lg border-2 border-dashed transition-colors min-h-[120px] h-fit pb-24",
+          isMainColumn && id === "todo" && "bg-gray-50/50 border-gray-200",
+          isMainColumn && id === "in-progress" && "bg-green-50/50 border-green-200",
+          className
+        )}
+      >
+        {children}
+      </div>
+    </div>
   )
 } 

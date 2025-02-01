@@ -97,7 +97,26 @@ This is a modern project management application built with Next.js, React, and S
 - Quick actions menu (edit, delete)
 - Status toggle with checkbox
 - Delete confirmation
-- Kanban-style column layout
+- Kanban-style column layout with drag and drop:
+  - Drag tasks between "To Do" and "In Progress" columns
+  - Dedicated "Drop here to mark as done" zone in sticky header
+  - Visual feedback during dragging
+  - Automatic status updates on drop
+  - Collapsible completed tasks section
+  - Return to "In Progress" option for completed tasks
+  - Droppable areas with visual distinction
+  - Minimum height for columns to ensure droppable space
+
+#### Task Statistics
+- Sticky header with real-time statistics:
+  - To Do tasks count and percentage
+  - In Progress tasks count and percentage
+  - Done tasks count and percentage
+  - Task distribution pie chart
+- Interactive statistics cards:
+  - Click to filter tasks by status
+  - Visual indication of active filter
+  - Automatic opening of completed tasks section when filtering by "done"
 
 ## Implementation Details
 
