@@ -11,7 +11,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Plus, FolderKanban, CalendarDays, Clock, Tag, Paperclip, Edit2, Trash2, MoreVertical, Circle, CheckCircle2, ListTodo, ChevronDown } from "lucide-react"
+import { Plus, FolderKanban, CalendarDays, Clock, Tag, Paperclip, Edit2, Trash2, MoreVertical, Circle, CheckCircle2, ListTodo, ChevronDown, RotateCcw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -337,28 +337,65 @@ export default function ProjectsPage() {
             </div>
 
             {/* Completed Projects Section */}
-            {doneCount > 0 && (
-              <div className="rounded-lg border bg-white shadow-sm">
-                <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-red-600" />
-                      <span>Completed Projects</span>
-                      <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
-                        {doneCount}
-                      </Badge>
-                    </div>
-                    <ChevronDown className="h-4 w-4 text-gray-500" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="divide-y border-t">
-                      {filteredProjects
+            <div className="rounded-lg border bg-white shadow-sm">
+              <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-red-600" />
+                    <span>Completed Projects</span>
+                    <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
+                      {doneCount}
+                    </Badge>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="divide-y border-t">
+                    {filteredProjects.filter(project => project.status === 'done').length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
+                        <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                        <p>No completed projects yet</p>
+                        <p className="text-xs mt-1">Projects marked as done will appear here</p>
+                      </div>
+                    ) : (
+                      filteredProjects
                         .filter(project => project.status === 'done')
                         .map((project) => (
                           <div
                             key={project.id}
                             className="group flex items-center gap-3 bg-red-50/50 px-4 py-3"
                           >
+                            <button
+                              onClick={async () => {
+                                if (window.confirm('Move this project back to in progress?')) {
+                                  const { data: { user } } = await supabase.auth.getUser()
+                                  if (!user) {
+                                    toast.error("User not found")
+                                    return
+                                  }
+
+                                  const { error: updateError } = await supabase
+                                    .from('projects')
+                                    .update({ status: 'in-progress' })
+                                    .eq('id', project.id)
+                                    .eq('created_by', user.id)
+
+                                  if (updateError) {
+                                    toast.error("Failed to update project status")
+                                    return
+                                  }
+
+                                  setProjects(prev => prev.map(p => 
+                                    p.id === project.id ? { ...p, status: 'in-progress' } : p
+                                  ))
+
+                                  toast.success("Project moved back to in progress")
+                                }
+                              }}
+                              className="flex-shrink-0 transition-transform hover:scale-110"
+                            >
+                              <CheckCircle2 className="h-4 w-4 text-red-600" />
+                            </button>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
@@ -387,18 +424,41 @@ export default function ProjectsPage() {
                                     <CalendarDays className="h-3 w-3" />
                                     <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
                                   </div>
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      onClick={(e) => {
+                                      onClick={async (e) => {
                                         e.preventDefault()
                                         e.stopPropagation()
-                                        handleEditProject(project.id)
+                                        if (window.confirm('Move this project back to in progress?')) {
+                                          const { data: { user } } = await supabase.auth.getUser()
+                                          if (!user) {
+                                            toast.error("User not found")
+                                            return
+                                          }
+
+                                          const { error: updateError } = await supabase
+                                            .from('projects')
+                                            .update({ status: 'in-progress' })
+                                            .eq('id', project.id)
+                                            .eq('created_by', user.id)
+
+                                          if (updateError) {
+                                            toast.error("Failed to update project status")
+                                            return
+                                          }
+
+                                          setProjects(prev => prev.map(p => 
+                                            p.id === project.id ? { ...p, status: 'in-progress' } : p
+                                          ))
+
+                                          toast.success("Project moved back to in progress")
+                                        }
                                       }}
-                                      className="h-7 w-7 hover:bg-white/80 hover:text-blue-600"
+                                      className="h-7 w-7 hover:bg-white/80 hover:text-green-600"
                                     >
-                                      <Edit2 className="h-3.5 w-3.5" />
+                                      <RotateCcw className="h-3.5 w-3.5" />
                                     </Button>
                                     <Button
                                       variant="ghost"
@@ -424,19 +484,19 @@ export default function ProjectsPage() {
                               )}
                             </div>
                           </div>
-                        ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
+                        ))
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
 
             {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {[...Array(6)].map((_, i) => (
                   <div
                     key={i}
-                    className="h-[280px] rounded-xl border bg-white/50 p-6 animate-pulse"
+                    className="h-40 rounded-xl border bg-white/50 p-6 animate-pulse"
                   />
                 ))}
               </div>
@@ -460,7 +520,7 @@ export default function ProjectsPage() {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredProjects
                   .filter(project => project.status !== 'done')
                   .map((project) => {
@@ -469,7 +529,7 @@ export default function ProjectsPage() {
                       <div
                         key={project.id}
                         className={cn(
-                          "group relative overflow-hidden rounded-lg border transition-all hover:shadow-md",
+                          "group relative flex overflow-hidden rounded-lg border transition-all hover:shadow-md h-40",
                           colors.bg,
                           colors.border,
                           colors.hover
@@ -504,8 +564,8 @@ export default function ProjectsPage() {
                           </Button>
                         </div>
 
-                        <div className="aspect-[3/2] w-full overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
-                          {project.cover_image ? (
+                        {project.cover_image && (
+                          <div className="w-40 overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
                             <Dialog>
                               <DialogTrigger asChild>
                                 <img
@@ -526,63 +586,50 @@ export default function ProjectsPage() {
                                 />
                               </DialogContent>
                             </Dialog>
-                          ) : (
-                            <div className={cn("h-full w-full relative overflow-hidden", project.color)}>
-                              <img
-                                src="https://images.unsplash.com/photo-1557683311-eac922347aa1?q=80&w=1000&auto=format&fit=crop"
-                                alt="Default project image"
-                                className="h-full w-full object-cover opacity-20"
-                              />
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <FolderKanban className="h-8 w-8 text-white/90" />
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
 
-                        <div className="p-3">
+                        <div className="flex-1 p-4">
                           <div className="space-y-3">
                             <div className="space-y-1">
                               <h3 className="text-base font-semibold line-clamp-1 text-gray-900">
                                 {project.title}
                               </h3>
                               <p className="text-xs text-muted-foreground line-clamp-2">
-                              {project.description}
-                            </p>
-                          </div>
+                                {project.description}
+                              </p>
+                            </div>
 
                             <div className="flex flex-wrap gap-1.5">
                               <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(project.status))}>
-                              {project.status.replace('-', ' ')}
-                            </Badge>
+                                {project.status.replace('-', ' ')}
+                              </Badge>
                               <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getPriorityColor(project.priority))}>
-                              {project.priority}
-                            </Badge>
-                          </div>
+                                {project.priority}
+                              </Badge>
+                            </div>
 
-                            <div className="space-y-2 pt-1">
+                            <div className="space-y-2">
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <CalendarDays className="h-3 w-3" />
-                              <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
-                            </div>
-                            {project.tags.length > 0 && (
+                                <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                              </div>
+                              {project.tags.length > 0 && (
                                 <div className="flex items-center gap-1.5">
                                   <Tag className="h-3 w-3 text-muted-foreground" />
-                                <div className="flex flex-wrap gap-1">
-                                  {project.tags.map((tag, index) => (
-                                    <Badge
-                                      key={index}
-                                      variant="secondary"
+                                  <div className="flex flex-wrap gap-1">
+                                    {project.tags.map((tag, index) => (
+                                      <Badge
+                                        key={index}
+                                        variant="secondary"
                                         className={cn("px-1.5 py-0 text-xs", colors.bg, colors.text)}
-                                    >
-                                      {tag}
-                                    </Badge>
-                                  ))}
-
+                                      >
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
                                 </div>
-
-                              </div>
-                            )}
+                              )}
                               {project.attachments.length > 1 && (
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                   <Paperclip className="h-3 w-3" />

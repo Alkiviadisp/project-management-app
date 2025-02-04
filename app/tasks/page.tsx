@@ -18,7 +18,8 @@ import {
   Trash2,
   Plus,
   ChevronDown,
-  RotateCcw
+  RotateCcw,
+  X
 } from "lucide-react"
 import {
   SidebarInset,
@@ -157,6 +158,8 @@ export default function TasksPage() {
       },
     })
   )
+  const [selectedTask, setSelectedTask] = React.useState<Task | null>(null)
+  const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
@@ -455,6 +458,10 @@ export default function TasksPage() {
     if (task) setActiveTask(task)
   }
 
+  const formatDate = (date: string) => {
+    return format(new Date(date), 'MMM d, yyyy')
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
@@ -704,7 +711,18 @@ export default function TasksPage() {
                     {filteredTasks
                       .filter(task => task.status === 'todo')
                       .map((task) => (
-                        <TaskCard key={task.id} task={task} />
+                        <TaskCard 
+                          key={task.id} 
+                          task={task} 
+                          onEdit={(task) => {
+                            setEditingTask(task)
+                            setIsDialogOpen(true)
+                          }}
+                          onTaskClick={(task) => {
+                            setSelectedTask(task)
+                            setIsDetailsOpen(true)
+                          }}
+                        />
                       ))}
                   </DroppableColumn>
 
@@ -713,14 +731,38 @@ export default function TasksPage() {
                     {filteredTasks
                       .filter(task => task.status === 'in-progress')
                       .map((task) => (
-                        <TaskCard key={task.id} task={task} />
+                        <TaskCard 
+                          key={task.id} 
+                          task={task} 
+                          onEdit={(task) => {
+                            setEditingTask(task)
+                            setIsDialogOpen(true)
+                          }}
+                          onTaskClick={(task) => {
+                            setSelectedTask(task)
+                            setIsDetailsOpen(true)
+                          }}
+                        />
                       ))}
                   </DroppableColumn>
                 </div>
               )}
 
               <DragOverlay>
-                {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
+                {activeTask ? (
+                  <TaskCard 
+                    task={activeTask} 
+                    isDragging 
+                    onEdit={(task) => {
+                      setEditingTask(task)
+                      setIsDialogOpen(true)
+                    }}
+                    onTaskClick={(task) => {
+                      setSelectedTask(task)
+                      setIsDetailsOpen(true)
+                    }}
+                  />
+                ) : null}
               </DragOverlay>
             </DndContext>
           </div>
@@ -740,8 +782,8 @@ export default function TasksPage() {
             <DialogTitle>{editingTask ? 'Edit Task' : 'Create Task'}</DialogTitle>
             <DialogDescription>
               {editingTask 
-                ? 'Update your task details below.'
-                : 'Add the details for your new task.'
+                ? 'Make changes to your task details below.'
+                : 'Fill in the details for your new task below.'
               }
             </DialogDescription>
           </DialogHeader>
@@ -842,6 +884,137 @@ export default function TasksPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Task Details Dialog */}
+      <Dialog 
+        open={isDetailsOpen} 
+        onOpenChange={setIsDetailsOpen}
+      >
+        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden">
+          {selectedTask && (
+            <div className="flex flex-col h-full">
+              <DialogHeader className="p-6 pb-4 border-b space-y-4">
+                <div className="flex items-center justify-between">
+                  <Badge 
+                    variant="secondary" 
+                    className={cn(
+                      "px-2.5 py-0.5 text-xs font-semibold",
+                      getStatusColor(selectedTask.status)
+                    )}
+                  >
+                    {selectedTask.status.replace('-', ' ')}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <DialogTitle className="text-xl font-semibold tracking-tight">{selectedTask.title}</DialogTitle>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 flex-shrink-0"
+                    onClick={() => {
+                      setIsDetailsOpen(false)
+                      setEditingTask(selectedTask)
+                      setIsDialogOpen(true)
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+                <DialogDescription className="text-sm text-gray-500">
+                  View and manage task details, status, and timeline.
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Task Details */}
+              <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+                {/* Project Info */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-50/50 border">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-sm">
+                    <FolderKanban className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Project</p>
+                    <Link 
+                      href={`/projects/${selectedTask.project_id}`}
+                      className="text-base font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                    >
+                      {selectedTask.project.title}
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Description */}
+                {selectedTask.description && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-gray-600">Description</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {selectedTask.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Dates & Timeline */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-gray-600">Due Date</h3>
+                    <div className="flex items-center gap-2 text-sm">
+                      <CalendarDays className="h-4 w-4 text-gray-500" />
+                      <span>{selectedTask.due_date ? formatDate(selectedTask.due_date) : 'No due date'}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-gray-600">Created</h3>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-4 w-4 text-gray-500" />
+                      <span>{formatDate(selectedTask.created_at)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-6 pt-4 border-t bg-gray-50/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleTaskStatus(selectedTask.id, selectedTask.status)}
+                      className="flex items-center gap-2"
+                    >
+                      {selectedTask.status === 'done' ? (
+                        <>
+                          <RotateCcw className="h-4 w-4" />
+                          <span>Reopen Task</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Mark as Done</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to delete this task?')) {
+                        deleteTask(selectedTask.id)
+                        setIsDetailsOpen(false)
+                      }
+                    }}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Task
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   )
 }
@@ -860,8 +1033,18 @@ function getStatusColor(status: ProjectStatus) {
   }
 }
 
-// Add this new component for the task card
-function TaskCard({ task, isDragging }: { task: Task; isDragging?: boolean }) {
+// Update the TaskCard component definition to include the new props
+function TaskCard({ 
+  task, 
+  isDragging,
+  onEdit,
+  onTaskClick
+}: { 
+  task: Task; 
+  isDragging?: boolean;
+  onEdit: (task: Task) => void;
+  onTaskClick: (task: Task) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging: isBeingDragged } = useDraggable({
     id: task.id,
     data: task,
@@ -872,24 +1055,44 @@ function TaskCard({ task, isDragging }: { task: Task; isDragging?: boolean }) {
     opacity: isBeingDragged ? 0 : 1
   } : undefined
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isDragging) {
+      onTaskClick(task)
+    }
+  }
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
+      onClick={handleClick}
       className={cn(
-        "group relative rounded-lg border bg-white p-4 shadow-sm transition-all hover:shadow touch-none",
+        "group relative rounded-lg border bg-white p-4 shadow-sm transition-all hover:shadow-md touch-none cursor-pointer",
         isDragging && "shadow-lg cursor-grabbing",
-        !isDragging && "cursor-grab"
+        !isDragging && "cursor-pointer hover:border-blue-200"
       )}
     >
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">{task.title}</h3>
-          <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(task.status))}>
-            {task.status.replace('-', ' ')}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-700 hover:bg-blue-50"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(task)
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(task.status))}>
+              {task.status.replace('-', ' ')}
+            </Badge>
+          </div>
         </div>
         {task.description && (
           <p className="text-xs text-muted-foreground line-clamp-2">
