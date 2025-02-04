@@ -418,15 +418,23 @@ export default function ProjectDetailsPage() {
   // Add this sorting function before the return statement
   const sortedTasks = React.useMemo(() => {
     return [...tasks].sort((a, b) => {
-      // If both tasks have due dates, compare them
-      if (a.due_date && b.due_date) {
-        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      // First sort by status (done tasks go to bottom)
+      if (a.status === 'done' && b.status !== 'done') return 1;
+      if (a.status !== 'done' && b.status === 'done') return -1;
+      
+      // Then sort by due date for non-done tasks
+      if (a.status !== 'done' && b.status !== 'done') {
+        // If both tasks have due dates, compare them
+        if (a.due_date && b.due_date) {
+          return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+        }
+        // If only a has a due date, it comes first
+        if (a.due_date) return -1
+        // If only b has a due date, it comes first
+        if (b.due_date) return 1
       }
-      // If only a has a due date, it comes first
-      if (a.due_date) return -1
-      // If only b has a due date, it comes first
-      if (b.due_date) return 1
-      // If neither has a due date, sort by created date
+      
+      // If both are done or no due dates, sort by created date
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
   }, [tasks])
@@ -820,13 +828,26 @@ export default function ProjectDetailsPage() {
               </div>
 
               <div className="space-y-4">
+                {sortedTasks.length === 0 && (
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-white/50 py-12 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100/50 text-blue-600">
+                      <CheckCircle2 className="h-6 w-6" />
+                    </div>
+                    <h3 className="mt-4 text-sm font-medium text-slate-900">No tasks yet</h3>
+                    <p className="mt-2 max-w-sm text-sm text-slate-600">
+                      Create your first task to start tracking progress on this project
+                    </p>
+                  </div>
+                )}
+
                 {sortedTasks.map((task) => (
                   <div
                     key={task.id}
                     className={cn(
                       "group relative overflow-hidden rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100",
-                      task.status === 'in-progress' && "bg-blue-50/50",
-                      task.status === 'done' && "bg-slate-50/50"
+                      task.due_date && new Date() > new Date(task.due_date) && task.status !== 'done' && "bg-red-50/50 border-red-100",
+                      task.status === 'done' && !task.due_date && "bg-slate-50/50",
+                      task.status === 'in-progress' && !task.due_date && "bg-blue-50/50"
                     )}
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-50/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
@@ -898,32 +919,27 @@ export default function ProjectDetailsPage() {
                             <Clock className="h-3.5 w-3.5" />
                             {format(new Date(task.created_at), 'MMM d, yyyy')}
                           </div>
-                          <Badge variant="secondary" className={cn(
-                            "px-2 py-1 text-xs rounded-md shadow-sm backdrop-blur-sm",
-                            task.status === 'done' && "bg-blue-100 text-blue-700 ring-1 ring-blue-200/50",
-                            task.status === 'in-progress' && "bg-blue-100 text-blue-700 ring-1 ring-blue-200/50",
-                            task.status === 'todo' && "bg-slate-100 text-slate-700 ring-1 ring-slate-200/50"
-                          )}>
-                            {task.status === 'in-progress' ? 'In Progress' : 
-                             task.status === 'done' ? 'Completed' : 'To Do'}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className={cn(
+                              "px-2 py-1 text-xs rounded-md shadow-sm backdrop-blur-sm",
+                              task.status === 'done' && "bg-blue-100 text-blue-700 ring-1 ring-blue-200/50",
+                              task.status === 'in-progress' && "bg-blue-100 text-blue-700 ring-1 ring-blue-200/50",
+                              task.status === 'todo' && "bg-slate-100 text-slate-700 ring-1 ring-slate-200/50"
+                            )}>
+                              {task.status === 'in-progress' ? 'In Progress' : 
+                               task.status === 'done' ? 'Completed' : 'To Do'}
+                            </Badge>
+                            {task.due_date && new Date() > new Date(task.due_date) && task.status !== 'done' && (
+                              <Badge variant="secondary" className="px-2 py-1 text-xs rounded-md shadow-sm backdrop-blur-sm bg-red-100 text-red-700 ring-1 ring-red-200/50">
+                                Overdue
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 ))}
-
-                {tasks.length === 0 && (
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-white/50 py-12 text-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100/50 text-blue-600">
-                      <CheckCircle2 className="h-6 w-6" />
-                    </div>
-                    <h3 className="mt-4 text-sm font-medium text-slate-900">No tasks yet</h3>
-                    <p className="mt-2 max-w-sm text-sm text-slate-600">
-                      Create your first task to start tracking progress on this project
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </div>

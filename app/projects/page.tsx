@@ -55,6 +55,16 @@ type Project = {
   } | null
 }
 
+type Task = {
+  id: string
+  title: string
+  description: string | null
+  status: "todo" | "in-progress" | "done"
+  due_date: string | null
+  project_id: string
+  created_at: string
+}
+
 const DynamicPieChart = dynamic(() => import('@/components/charts/task-distribution-chart'), {
   ssr: false,
   loading: () => (
@@ -66,6 +76,7 @@ const DynamicPieChart = dynamic(() => import('@/components/charts/task-distribut
 
 export default function ProjectsPage() {
   const [projects, setProjects] = React.useState<Project[]>([])
+  const [tasks, setTasks] = React.useState<Task[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const supabase = createClient()
   const router = useRouter()
@@ -75,39 +86,39 @@ export default function ProjectsPage() {
   const [isCompletedOpen, setIsCompletedOpen] = React.useState(false)
 
   React.useEffect(() => {
-    async function fetchProjects() {
+    const fetchData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error("User not found")
 
-        let query = supabase
-          .from('projects')
-          .select('*')
-          .eq('created_by', user.id)
+        const [projectsResponse, tasksResponse] = await Promise.all([
+          supabase
+            .from('projects')
+            .select('*')
+            .eq('created_by', user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('tasks')
+            .select('*')
+            .eq('created_by', user.id)
+            .order('created_at', { ascending: false })
+        ])
 
-        // Apply status filter based on URL parameter
-        if (filterParam === 'active') {
-          query = query.in('status', ['todo', 'in-progress'])
-        } else if (filterParam === 'completed') {
-          query = query.eq('status', 'done')
-        }
+        if (projectsResponse.error) throw projectsResponse.error
+        if (tasksResponse.error) throw tasksResponse.error
 
-        query = query.order('created_at', { ascending: false })
-
-        const { data, error } = await query
-
-        if (error) throw error
-        setProjects(data || [])
+        setProjects(projectsResponse.data)
+        setTasks(tasksResponse.data)
       } catch (error) {
-        console.error('Error fetching projects:', error)
+        console.error('Error fetching data:', error)
         toast.error("Failed to load projects")
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchProjects()
-  }, [filterParam])
+    fetchData()
+  }, [])
 
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
@@ -212,6 +223,12 @@ export default function ProjectsPage() {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [projects, statusFilter])
 
+  const getProjectTaskCount = (projectId: string) => {
+    const totalTasks = tasks.filter(task => task.project_id === projectId).length
+    const completedTasks = tasks.filter(task => task.project_id === projectId && task.status === 'done').length
+    return { total: totalTasks, completed: completedTasks }
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
@@ -243,7 +260,7 @@ export default function ProjectsPage() {
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-start py-10 px-4">
           <div className="w-full max-w-7xl space-y-6 relative">
             {/* Statistics Cards */}
-            <div className="sticky top-0 z-30 bg-white backdrop-blur-sm pt-4 pb-6">
+            <div className="sticky top-16 z-30 bg-gradient-to-br from-white to-blue-50/20 backdrop-blur-sm pt-4 pb-6 -mx-4 px-4 border-b">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <button 
                   onClick={() => handleCardClick("todo")}
@@ -363,7 +380,10 @@ export default function ProjectsPage() {
                         .map((project) => (
                           <div
                             key={project.id}
-                            className="group flex items-center gap-3 bg-red-50/50 px-4 py-3"
+                            className={cn(
+                              "group flex items-center gap-3 bg-red-50/50 px-4 py-3",
+                              new Date() > new Date(project.due_date) && "bg-red-50"
+                            )}
                           >
                             <button
                               onClick={async () => {
@@ -422,7 +442,12 @@ export default function ProjectsPage() {
                                 <div className="flex items-center gap-2">
                                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <CalendarDays className="h-3 w-3" />
-                                    <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                                    <span className={cn(
+                                      new Date() > new Date(project.due_date) && "text-red-600 font-medium"
+                                    )}>
+                                      Due {format(new Date(project.due_date), 'MMM d, yyyy')}
+                                      {new Date() > new Date(project.due_date) && " (Overdue)"}
+                                    </span>
                                   </div>
                                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Button
@@ -529,10 +554,9 @@ export default function ProjectsPage() {
                       <div
                         key={project.id}
                         className={cn(
-                          "group relative flex overflow-hidden rounded-lg border transition-all hover:shadow-md h-40",
-                          colors.bg,
-                          colors.border,
-                          colors.hover
+                          "group relative flex overflow-hidden rounded-lg border transition-all hover:shadow-md min-h-[200px]",
+                          new Date() > new Date(project.due_date) && project.status !== 'done' ? "bg-red-50 border-red-200" : "bg-white",
+                          "hover:bg-slate-50"
                         )}
                       >
                         <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
@@ -565,7 +589,7 @@ export default function ProjectsPage() {
                         </div>
 
                         {project.cover_image && (
-                          <div className="w-40 overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
+                          <div className="absolute top-0 left-0 w-[100px] h-[100px] overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
                             <Dialog>
                               <DialogTrigger asChild>
                                 <img
@@ -591,7 +615,7 @@ export default function ProjectsPage() {
 
                         <div className="flex-1 p-4">
                           <div className="space-y-3">
-                            <div className="space-y-1">
+                            <div className={cn("space-y-1", project.cover_image && "pl-[108px]")}>
                               <h3 className="text-base font-semibold line-clamp-1 text-gray-900">
                                 {project.title}
                               </h3>
@@ -600,7 +624,7 @@ export default function ProjectsPage() {
                               </p>
                             </div>
 
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className={cn("flex flex-wrap gap-1.5", project.cover_image && "pl-[108px]")}>
                               <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(project.status))}>
                                 {project.status.replace('-', ' ')}
                               </Badge>
@@ -608,11 +632,34 @@ export default function ProjectsPage() {
                                 {project.priority}
                               </Badge>
                             </div>
+                          </div>
+
+                          <div className="mt-8 space-y-3">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <ListTodo className="h-3 w-3" />
+                              <div className="flex-1">
+                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden transition-colors group-hover:bg-slate-200">
+                                  <div 
+                                    className="h-full bg-blue-500 rounded-full transition-all" 
+                                    style={{ 
+                                      width: `${getProjectTaskCount(project.id).total === 0 ? 0 : 
+                                        (getProjectTaskCount(project.id).completed / getProjectTaskCount(project.id).total) * 100}%` 
+                                    }} 
+                                  />
+                                </div>
+                              </div>
+                              <span className="flex-shrink-0">{getProjectTaskCount(project.id).completed}/{getProjectTaskCount(project.id).total}</span>
+                            </div>
 
                             <div className="space-y-2">
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <CalendarDays className="h-3 w-3" />
-                                <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
+                                <span className={cn(
+                                  new Date() > new Date(project.due_date) && "text-red-600 font-medium"
+                                )}>
+                                  Due {format(new Date(project.due_date), 'MMM d, yyyy')}
+                                  {new Date() > new Date(project.due_date) && " (Overdue)"}
+                                </span>
                               </div>
                               {project.tags.length > 0 && (
                                 <div className="flex items-center gap-1.5">
@@ -622,7 +669,7 @@ export default function ProjectsPage() {
                                       <Badge
                                         key={index}
                                         variant="secondary"
-                                        className={cn("px-1.5 py-0 text-xs", colors.bg, colors.text)}
+                                        className="px-1.5 py-0 text-xs bg-slate-100 text-slate-700"
                                       >
                                         {tag}
                                       </Badge>

@@ -144,7 +144,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = React.useState<Task[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [statusFilter, setStatusFilter] = React.useState<ProjectStatus | "all">("all")
+  const [statusFilter, setStatusFilter] = React.useState<ProjectStatus | "all" | "overdue">("all")
   const [isCompletedOpen, setIsCompletedOpen] = React.useState(false)
   const supabase = createClient()
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
@@ -250,10 +250,23 @@ export default function TasksPage() {
     }
   }, [editingTask, form])
 
+  // Add overdue tasks calculation
+  const overdueCount = tasks.filter(t => 
+    t.due_date && 
+    new Date() > new Date(t.due_date) && 
+    t.status !== 'done'
+  ).length
+
+  // Modify the filteredTasks to handle overdue filter
   const filteredTasks = React.useMemo(() => {
     return tasks
       .filter(task => {
         // Apply status filter
+        if (statusFilter === "overdue") {
+          return task.due_date && 
+                 new Date() > new Date(task.due_date) && 
+                 task.status !== 'done';
+        }
         if (statusFilter !== "all") {
           return task.status === statusFilter;
         }
@@ -265,15 +278,23 @@ export default function TasksPage() {
         task.project.title.toLowerCase().includes(searchQuery.toLowerCase())
       )
       .sort((a, b) => {
-        // If both tasks have due dates, compare them
-        if (a.due_date && b.due_date) {
-          return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+        // First sort by status (done tasks go to bottom)
+        if (a.status === 'done' && b.status !== 'done') return 1;
+        if (a.status !== 'done' && b.status === 'done') return -1;
+        
+        // Then sort by due date for non-done tasks
+        if (a.status !== 'done' && b.status !== 'done') {
+          // If both tasks have due dates, compare them
+          if (a.due_date && b.due_date) {
+            return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+          }
+          // If only a has a due date, it comes first
+          if (a.due_date) return -1
+          // If only b has a due date, it comes first
+          if (b.due_date) return 1
         }
-        // If only a has a due date, it comes first
-        if (a.due_date) return -1
-        // If only b has a due date, it comes first
-        if (b.due_date) return 1
-        // If neither has a due date, sort by created date
+        
+        // If both are done or no due dates, sort by created date
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
   }, [tasks, searchQuery, statusFilter])
@@ -404,7 +425,7 @@ export default function TasksPage() {
     }
   }
 
-  const handleCardClick = (status: ProjectStatus | "all") => {
+  const handleCardClick = (status: ProjectStatus | "all" | "overdue") => {
     setStatusFilter(status);
     if (status === "done") {
       setIsCompletedOpen(true);
@@ -548,22 +569,22 @@ export default function TasksPage() {
                     </button>
 
                     <button 
-                      onClick={() => handleCardClick("done")}
+                      onClick={() => handleCardClick("overdue")}
                       className="transition-transform hover:scale-105 focus:outline-none"
                     >
                       <Card className={cn(
                         "hover:border-blue-200 hover:shadow-md transition-all",
-                        statusFilter === "done" && "border-red-500 shadow-md"
+                        statusFilter === "overdue" && "border-red-500 shadow-md"
                       )}>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                          <CardTitle className="text-sm font-medium">Done</CardTitle>
-                          <CheckCircle2 className="h-4 w-4 text-red-600" />
+                          <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+                          <Clock className="h-4 w-4 text-red-600" />
                         </CardHeader>
                         <CardContent>
                           <div className="h-[80px]">
-                            <div className="text-2xl font-bold">{doneCount}</div>
+                            <div className="text-2xl font-bold">{overdueCount}</div>
                             <p className="text-xs text-muted-foreground">
-                              {((doneCount / totalTasks) * 100).toFixed(1)}% of total tasks
+                              {((overdueCount / totalTasks) * 100).toFixed(1)}% of total tasks
                             </p>
                           </div>
                         </CardContent>
@@ -1033,7 +1054,7 @@ function getStatusColor(status: ProjectStatus) {
   }
 }
 
-// Update the TaskCard component definition to include the new props
+// Update the TaskCard component definition
 function TaskCard({ 
   task, 
   isDragging,
@@ -1061,6 +1082,8 @@ function TaskCard({
     }
   }
 
+  const isOverdue = task.due_date && new Date() > new Date(task.due_date) && task.status !== 'done'
+
   return (
     <div
       ref={setNodeRef}
@@ -1069,9 +1092,12 @@ function TaskCard({
       {...attributes}
       onClick={handleClick}
       className={cn(
-        "group relative rounded-lg border bg-white p-4 shadow-sm transition-all hover:shadow-md touch-none cursor-pointer",
+        "group relative rounded-lg border bg-white p-4 shadow-sm transition-all hover:shadow-md touch-none",
         isDragging && "shadow-lg cursor-grabbing",
-        !isDragging && "cursor-pointer hover:border-blue-200"
+        !isDragging && "cursor-pointer hover:border-blue-200",
+        isOverdue && "bg-red-50/50 border-red-200",
+        task.status === 'in-progress' && "bg-blue-50/50",
+        task.status === 'done' && "bg-slate-50/50"
       )}
     >
       <div className="space-y-2">
@@ -1100,10 +1126,17 @@ function TaskCard({
           </p>
         )}
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CalendarDays className="h-3 w-3" />
-            <span>Due {task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : 'No date'}</span>
-          </div>
+          {task.due_date && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CalendarDays className="h-3 w-3" />
+              <span className={cn(
+                isOverdue && "text-red-600 font-medium"
+              )}>
+                Due {format(new Date(task.due_date), 'MMM d, yyyy')}
+                {isOverdue && " (Overdue)"}
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <FolderKanban className="h-3 w-3" />
             <span>{task.project.title}</span>
