@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { LayoutDashboard, Clock, ArrowRight, CheckCircle2, FolderKanban, Search, Users, CalendarCheck, ListTodo, TrendingUp, TrendingDown } from "lucide-react"
+import { LayoutDashboard, Clock, ArrowRight, CheckCircle2, FolderKanban, Search, Users, CalendarCheck, ListTodo, TrendingUp, TrendingDown, CalendarDays, Edit2, Trash2 } from "lucide-react"
 import {
   SidebarInset,
   SidebarProvider,
@@ -26,6 +26,8 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
+import { useRouter } from "next/navigation"
+import { toast } from "react-hot-toast"
 
 // Project colors for progress bars
 const projectColors = [
@@ -40,6 +42,13 @@ const projectColors = [
   "#FF9100", // Orange
 ]
 
+type Task = {
+  id: string
+  title: string
+  status: "todo" | "in-progress" | "done"
+  project_id: string
+}
+
 type Project = {
   id: string
   title: string
@@ -48,6 +57,7 @@ type Project = {
   due_date: string
   priority: "low" | "medium" | "high"
   tags: string[]
+  tasks: Task[]
   attachments: Array<{
     url: string
     name: string
@@ -120,9 +130,68 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = React.useState(true)
   const [userNickname, setUserNickname] = React.useState("")
   const supabase = createClient()
+  const router = useRouter()
+
+  // Calculate the month-over-month change in completed projects
+  const completedProjectsTrend = React.useMemo(() => {
+    const currentMonth = new Date().getMonth()
+    const lastMonth = currentMonth - 1
+    
+    const thisMonthCompleted = projects.filter(p => {
+      const date = new Date(p.created_at)
+      return date.getMonth() === currentMonth
+    }).length
+
+    const lastMonthCompleted = projects.filter(p => {
+      const date = new Date(p.created_at)
+      return date.getMonth() === lastMonth
+    }).length
+
+    const percentageChange = lastMonthCompleted === 0 
+      ? thisMonthCompleted * 100 
+      : ((thisMonthCompleted - lastMonthCompleted) / lastMonthCompleted) * 100
+
+    return {
+      trend: percentageChange.toFixed(1),
+      isUp: percentageChange >= 0
+    }
+  }, [projects])
 
   // Calculate stats based on projects
-  const stats = React.useMemo(() => calculateStats(projects), [projects])
+  const stats = React.useMemo(() => {
+    // Calculate total tasks and completed tasks across all projects
+    const allTasks = projects.reduce((acc, project) => [...acc, ...(project.tasks || [])], [] as Task[])
+    const doneTasks = allTasks.filter(task => task.status === 'done')
+    const completionPercentage = allTasks.length > 0 
+      ? Math.round((doneTasks.length / allTasks.length) * 100)
+      : 0
+
+    return [
+      {
+        name: "Total Projects",
+        value: projects.length,
+        icon: <FolderKanban className="h-4 w-4 text-muted-foreground" />,
+        href: "/projects"
+      },
+      {
+        name: "Tasks Progress",
+        value: `${completionPercentage}%`,
+        icon: <CheckCircle2 className="h-4 w-4 text-muted-foreground" />,
+      },
+      {
+        name: "Tasks",
+        value: `${doneTasks.length}/${allTasks.length}`,
+        icon: <ListTodo className="h-4 w-4 text-muted-foreground" />,
+      },
+      {
+        name: "Month Trend",
+        value: `${Math.abs(Number(completedProjectsTrend.trend))}%`,
+        icon: completedProjectsTrend.isUp ? 
+          <TrendingUp className="h-4 w-4 text-green-500" /> : 
+          <TrendingDown className="h-4 w-4 text-red-500" />,
+      }
+    ]
+  }, [projects, completedProjectsTrend])
 
   // Add this after the stats calculation
   const priorityData = React.useMemo(() => {
@@ -167,47 +236,11 @@ export default function DashboardPage() {
     { status: "done", count: projects.filter(p => p.status === "done").length, fill: "#E5E5E5" }, // Pale Grey
   ], [projects])
 
-  // Calculate the month-over-month change in completed projects
-  const completedProjectsTrend = React.useMemo(() => {
-    const currentMonth = new Date().getMonth()
-    const lastMonth = currentMonth - 1
-    
-    const thisMonthCompleted = projects.filter(p => {
-      const date = new Date(p.created_at)
-      return date.getMonth() === currentMonth
-    }).length
-
-    const lastMonthCompleted = projects.filter(p => {
-      const date = new Date(p.created_at)
-      return date.getMonth() === lastMonth
-    }).length
-
-    const percentageChange = lastMonthCompleted === 0 
-      ? thisMonthCompleted * 100 
-      : ((thisMonthCompleted - lastMonthCompleted) / lastMonthCompleted) * 100
-
-    return {
-      trend: percentageChange.toFixed(1),
-      isUp: percentageChange >= 0
-    }
-  }, [projects])
-
   React.useEffect(() => {
-    async function fetchUserAndProjects() {
+    async function fetchProjects() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error("User not found")
-
-        // Fetch user profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('nickname')
-          .eq('id', user.id)
-          .single()
-
-        if (profile?.nickname) {
-          setUserNickname(profile.nickname)
-        }
 
         // Fetch projects
         const { data: projectsData, error: projectsError } = await supabase
@@ -218,16 +251,57 @@ export default function DashboardPage() {
 
         if (projectsError) throw projectsError
 
-        setProjects(projectsData || [])
+        // Fetch tasks for each project
+        const projectsWithTasks = await Promise.all(projectsData.map(async (project) => {
+          const { data: tasksData, error: tasksError } = await supabase
+            .from('tasks')
+            .select('id, title, status, project_id')
+            .eq('project_id', project.id)
+
+          if (tasksError) {
+            console.error('Error fetching tasks:', tasksError)
+            return {
+              ...project,
+              tasks: []
+            }
+          }
+
+          return {
+            ...project,
+            tasks: tasksData || []
+          }
+        }))
+
+        setProjects(projectsWithTasks)
+
+        // Fetch user nickname
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('id', user.id)
+          .single()
+
+        if (profileData?.nickname) {
+          setUserNickname(profileData.nickname)
+        }
       } catch (error) {
-        console.error('Error fetching data:', error)
+        console.error('Error:', error)
+        toast.error("Failed to load projects")
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchUserAndProjects()
-  }, [])
+    fetchProjects()
+  }, [supabase])
+
+  // Function to get task count and completion for a project
+  const getProjectTaskCount = (project: Project) => {
+    if (!project.tasks) return { total: 0, completed: 0 }
+    const totalTasks = project.tasks.length
+    const completedTasks = project.tasks.filter(task => task.status === 'done').length
+    return { total: totalTasks, completed: completedTasks }
+  }
 
   const todoProjects = projects.filter(p => p.status === "todo")
   const inProgressProjects = projects.filter(p => p.status === "in-progress")
@@ -260,58 +334,6 @@ export default function DashboardPage() {
         return projectColors[0]
     }
   }
-
-  const ProjectCard = ({ project }: { project: Project }) => (
-    <Card key={project.id} className="group bg-white transition-all hover:shadow-md">
-      <CardHeader className="p-3 pb-2">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-grow">
-            <h3 className="font-semibold line-clamp-1 text-sm">{project.title}</h3>
-            <Progress 
-              value={getProjectProgress(project.status)} 
-              indicatorColor={getPriorityColor(project.priority)}
-              className="mt-2"
-            />
-          </div>
-          {project.attachments?.[0] ? (
-            <div className="flex-shrink-0">
-              <img
-                src={project.attachments[0].url}
-                alt={project.attachments[0].name}
-                className="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200"
-              />
-            </div>
-          ) : (
-            <div className={cn(
-              "h-10 w-10 rounded-lg flex items-center justify-center bg-blue-100",
-              project.color
-            )}>
-              <FolderKanban className="h-5 w-5 text-blue-600" />
-            </div>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="p-3 pt-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            <span>Due {format(new Date(project.due_date), 'MMM d')}</span>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-7 gap-1 px-2 opacity-0 group-hover:opacity-100"
-            asChild
-          >
-            <Link href={`/projects/${project.id}`}>
-              View
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
 
   if (isLoading) {
     return (
@@ -381,14 +403,14 @@ export default function DashboardPage() {
           {/* Charts Section */}
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
-              <CardHeader>
-                <CardTitle>Project Progress</CardTitle>
-                <CardDescription>Projects created in the last 7 days</CardDescription>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Project Progress</CardTitle>
+                <CardDescription className="text-xs">Last 7 days</CardDescription>
               </CardHeader>
               <CardContent>
                 <ChartContainer 
                   config={chartConfig}
-                  className="mx-auto h-[180px]"
+                  className="mx-auto h-[120px]"
                 >
                   <BarChart data={projectProgressData}>
                     <CartesianGrid vertical={false} />
@@ -397,6 +419,7 @@ export default function DashboardPage() {
                       tickLine={false}
                       tickMargin={10}
                       axisLine={false}
+                      tick={{ fontSize: 12 }}
                     />
                     <ChartTooltip
                       cursor={false}
@@ -404,27 +427,22 @@ export default function DashboardPage() {
                     />
                     <Bar 
                       dataKey="projects" 
-                      fill="#00C2FF"  // Electric Blue
+                      fill="#00C2FF"
                       radius={[4, 4, 0, 0]} 
                     />
                   </BarChart>
                 </ChartContainer>
               </CardContent>
-              <CardFooter className="flex-col gap-2 text-sm">
-                <div className="leading-none text-muted-foreground">
-                  Total projects created in the last 7 days: {projectProgressData.reduce((sum, day) => sum + day.projects, 0)}
-                </div>
-              </CardFooter>
             </Card>
-            <Card className="flex flex-col">
-              <CardHeader className="items-center pb-0">
-                <CardTitle>Project Status Distribution</CardTitle>
-                <CardDescription>{format(new Date(), 'MMMM yyyy')}</CardDescription>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Status Distribution</CardTitle>
+                <CardDescription className="text-xs">{format(new Date(), 'MMMM yyyy')}</CardDescription>
               </CardHeader>
-              <CardContent className="flex-1 pb-0">
+              <CardContent>
                 <ChartContainer
                   config={chartConfig}
-                  className="mx-auto aspect-square max-h-[250px]"
+                  className="mx-auto h-[120px]"
                 >
                   <PieChart>
                     <ChartTooltip
@@ -435,109 +453,154 @@ export default function DashboardPage() {
                       data={projectStatusData}
                       dataKey="count"
                       nameKey="status"
-                      innerRadius={60}
-                    >
-                      <Pie
-                        data={priorityData}
-                        dataKey="count"
-                        nameKey="priority"
-                        fill="#000"
-                        label
-                      />
-                    </Pie>
+                      innerRadius={25}
+                      outerRadius={40}
+                    />
                   </PieChart>
                 </ChartContainer>
+                <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <div className="h-2 w-2 rounded-full bg-[#01E076]" />
+                    <span>To Do ({projectStatusData[0].count})</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="h-2 w-2 rounded-full bg-[#00C2FF]" />
+                    <span>In Progress ({projectStatusData[1].count})</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="h-2 w-2 rounded-full bg-[#E5E5E5]" />
+                    <span>Done ({projectStatusData[2].count})</span>
+                  </div>
+                </div>
               </CardContent>
-              <CardFooter className="flex-col gap-2 text-sm">
-                <div className="flex items-center gap-2 font-medium leading-none">
-                  {completedProjectsTrend.isUp ? (
-                    <>
-                      Trending up by {completedProjectsTrend.trend}% this month{" "}
-                      <TrendingUp className="h-4 w-4 text-green-500" />
-                    </>
-                  ) : (
-                    <>
-                      Trending down by {Math.abs(Number(completedProjectsTrend.trend))}% this month{" "}
-                      <TrendingDown className="h-4 w-4 text-red-500" />
-                    </>
-                  )}
-                </div>
-                <div className="leading-none text-muted-foreground">
-                  Showing total projects by current status
-                </div>
-              </CardFooter>
             </Card>
           </div>
 
           {/* Projects Section */}
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {/* To Do Column */}
-            <div className="flex flex-col gap-4">
-              <div className="rounded-xl bg-[#01E076]/10 p-4">
-                <div className="flex items-center gap-2 px-2 pb-4">
-                  <Clock className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="font-semibold">To Do</h2>
-                  <Badge variant="secondary" className="ml-auto">
-                    {todoProjects.length}
-                  </Badge>
-                </div>
-                <div className="space-y-4">
-                  {todoProjects.map(project => (
-                    <ProjectCard key={project.id} project={project} />
-                  ))}
-                  {todoProjects.length === 0 && (
-                    <div className="rounded-lg border border-dashed p-4 text-center">
-                      <p className="text-sm text-muted-foreground">No projects to do</p>
-                    </div>
-                  )}
-                </div>
+          <div className="rounded-lg border bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <div className="flex items-center gap-2">
+                <FolderKanban className="h-4 w-4 text-muted-foreground" />
+                <h2 className="font-medium">All Projects</h2>
+                <Badge variant="secondary" className="ml-2">
+                  {projects.length}
+                </Badge>
               </div>
+              <Button variant="ghost" size="sm" asChild className="gap-1 text-xs">
+                <Link href="/projects">
+                  View All
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </Button>
             </div>
-
-            {/* In Progress Column */}
-            <div className="flex flex-col gap-4">
-              <div className="rounded-xl bg-[#00C2FF]/10 p-4">
-                <div className="flex items-center gap-2 px-2 pb-4">
-                  <ArrowRight className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="font-semibold">In Progress</h2>
-                  <Badge variant="secondary" className="ml-auto">
-                    {inProgressProjects.length}
-                  </Badge>
-                </div>
-                <div className="space-y-4">
-                  {inProgressProjects.map(project => (
-                    <ProjectCard key={project.id} project={project} />
-                  ))}
-                  {inProgressProjects.length === 0 && (
-                    <div className="rounded-lg border border-dashed p-4 text-center">
-                      <p className="text-sm text-muted-foreground">No projects in progress</p>
+            <div className="divide-y">
+              {projects.slice(0, 5).map(project => (
+                <Link 
+                  key={project.id} 
+                  href={`/projects/${project.id}`}
+                  className="group relative flex items-center gap-6 px-4 py-4 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="w-[200px] shrink-0">
+                    <h3 className="font-bold text-sm truncate">{project.title}</h3>
+                    <span className="text-xs text-muted-foreground">
+                      {project.tasks?.length || 0} tasks
+                    </span>
+                  </div>
+                  <div className="flex-1 flex items-center justify-center gap-2 min-w-[300px]">
+                    <div className="flex items-center gap-2 w-full max-w-[400px]">
+                      <Progress 
+                        value={(() => {
+                          const { total, completed } = getProjectTaskCount(project)
+                          return total === 0 ? 0 : (completed / total) * 100
+                        })()}
+                        className="h-2"
+                        indicatorColor="#3b82f6"
+                      />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap w-[45px] text-center">
+                        {(() => {
+                          const { total, completed } = getProjectTaskCount(project)
+                          return total === 0 ? '0%' : `${Math.round((completed / total) * 100)}%`
+                        })()}
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
+                  </div>
+                  <div className="flex items-center gap-6 shrink-0">
+                    <Badge variant="secondary" className={cn(
+                      "px-1.5 py-0 text-xs min-w-[80px] text-center",
+                      project.status === 'todo' && "bg-slate-100 text-slate-700",
+                      project.status === 'in-progress' && "bg-blue-100 text-blue-700",
+                      project.status === 'done' && "bg-green-100 text-green-700"
+                    )}>
+                      {project.status === 'in-progress' ? 'In Progress' : 
+                       project.status === 'done' ? 'Completed' : 'To Do'}
+                    </Badge>
+                    <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs min-w-[60px] text-center", 
+                      project.priority === 'low' && "bg-green-100 text-green-700",
+                      project.priority === 'medium' && "bg-yellow-100 text-yellow-700",
+                      project.priority === 'high' && "bg-red-100 text-red-700"
+                    )}>
+                      {project.priority}
+                    </Badge>
+                    <span className={cn(
+                      "text-xs text-muted-foreground flex items-center gap-1 min-w-[120px]",
+                      new Date() > new Date(project.due_date) && project.status !== 'done' && "text-red-600 font-medium"
+                    )}>
+                      <CalendarDays className="h-3 w-3" />
+                      Due {format(new Date(project.due_date), 'MMM d')}
+                      {new Date() > new Date(project.due_date) && project.status !== 'done' && " (Overdue)"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-50"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          router.push(`/projects/new?edit=${project.id}`)
+                        }}
+                      >
+                        <Edit2 className="h-3.5 w-3.5 text-blue-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                        onClick={async (e) => {
+                          e.preventDefault()
+                          if (window.confirm('Are you sure you want to delete this project?')) {
+                            try {
+                              const { data: { user } } = await supabase.auth.getUser()
+                              if (!user) throw new Error("User not found")
 
-            {/* Done Column */}
-            <div className="flex flex-col gap-4">
-              <div className="rounded-xl bg-[#E5E5E5]/20 p-4">
-                <div className="flex items-center gap-2 px-2 pb-4">
-                  <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="font-semibold">Done</h2>
-                  <Badge variant="secondary" className="ml-auto">
-                    {doneProjects.length}
-                  </Badge>
-                </div>
-                <div className="space-y-4">
-                  {doneProjects.map(project => (
-                    <ProjectCard key={project.id} project={project} />
-                  ))}
-                  {doneProjects.length === 0 && (
-                    <div className="rounded-lg border border-dashed p-4 text-center">
-                      <p className="text-sm text-muted-foreground">No completed projects</p>
+                              const { error } = await supabase
+                                .from('projects')
+                                .delete()
+                                .eq('id', project.id)
+                                .eq('created_by', user.id)
+
+                              if (error) throw error
+
+                              setProjects(projects.filter(p => p.id !== project.id))
+                              toast.success("Project deleted successfully")
+                            } catch (error) {
+                              console.error('Error deleting project:', error)
+                              toast.error("Failed to delete project")
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                      </Button>
                     </div>
-                  )}
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </Link>
+              ))}
+              {projects.length === 0 && (
+                <div className="px-4 py-3 text-sm text-muted-foreground text-center">
+                  No projects yet
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
