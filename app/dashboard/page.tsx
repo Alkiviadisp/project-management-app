@@ -159,39 +159,39 @@ export default function DashboardPage() {
 
   // Calculate stats based on projects
   const stats = React.useMemo(() => {
-    // Calculate total tasks and completed tasks across all projects
-    const allTasks = projects.reduce((acc, project) => [...acc, ...(project.tasks || [])], [] as Task[])
-    const doneTasks = allTasks.filter(task => task.status === 'done')
-    const completionPercentage = allTasks.length > 0 
-      ? Math.round((doneTasks.length / allTasks.length) * 100)
-      : 0
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const activeProjects = projects.filter(p => p.status === "todo" || p.status === "in-progress").length
+    const tasksToday = "5" // This should be replaced with actual tasks count once we implement tasks
+    const completedProjects = projects.filter(p => p.status === "done").length
 
     return [
       {
-        name: "Total Projects",
-        value: projects.length,
-        icon: <FolderKanban className="h-4 w-4 text-muted-foreground" />,
-        href: "/projects"
-      },
-      {
-        name: "Tasks Progress",
-        value: `${completionPercentage}%`,
-        icon: <CheckCircle2 className="h-4 w-4 text-muted-foreground" />,
-      },
-      {
-        name: "Tasks",
-        value: `${doneTasks.length}/${allTasks.length}`,
+        name: "Active Projects",
+        value: activeProjects.toString(),
         icon: <ListTodo className="h-4 w-4 text-muted-foreground" />,
+        href: "/projects?filter=active"
       },
       {
-        name: "Month Trend",
-        value: `${Math.abs(Number(completedProjectsTrend.trend))}%`,
-        icon: completedProjectsTrend.isUp ? 
-          <TrendingUp className="h-4 w-4 text-green-500" /> : 
-          <TrendingDown className="h-4 w-4 text-red-500" />,
+        name: "Tasks Due Today",
+        value: tasksToday,
+        icon: <CalendarCheck className="h-4 w-4 text-muted-foreground" />,
+        href: "/tasks?filter=due-today"
+      },
+      {
+        name: "Team Members",
+        value: "5",
+        icon: <Users className="h-4 w-4 text-muted-foreground" />
+      },
+      {
+        name: "Completed Projects",
+        value: completedProjects.toString(),
+        icon: <ListTodo className="h-4 w-4 text-muted-foreground" />,
+        href: "/projects?filter=completed"
       }
     ]
-  }, [projects, completedProjectsTrend])
+  }, [projects])
 
   // Add this after the stats calculation
   const priorityData = React.useMemo(() => {
