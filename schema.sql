@@ -184,8 +184,29 @@ VALUES (
   true,
   false,
   10485760,  -- 10MB limit
-  '{image/jpeg,image/png,image/gif,image/webp}'
-) ON CONFLICT (id) DO NOTHING;
+  '{
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "application/pdf",
+    "text/plain",
+    "text/csv",
+    "application/json",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.presentation",
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/octet-stream"
+  }'
+) ON CONFLICT (id) DO UPDATE SET allowed_mime_types = EXCLUDED.allowed_mime_types;
 
 -- Drop existing storage policies if they exist
 DROP POLICY IF EXISTS "Give users authenticated access to own folder" ON storage.objects;

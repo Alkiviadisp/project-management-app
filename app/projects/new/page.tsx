@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, Loader2, ArrowLeft, X, Upload, FolderKanban } from "lucide-react"
+import { Calendar as CalendarIcon, Loader2, ArrowLeft, X, Upload, FolderKanban, FileText, Table, File, ChevronDown } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { FileInput } from "@/components/ui/file-input"
@@ -44,6 +44,11 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible"
 
 const projectFormSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -72,8 +77,8 @@ const defaultValues: Partial<ProjectFormValues> = {
   attachments: [],
 }
 
-// Update the type definition for better type safety
-type StoredImage = {
+// Update the type definition
+type StoredFile = {
   url: string;
   name: string;
   type: string;
@@ -84,7 +89,8 @@ type StoredImage = {
 export default function NewProjectPage() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [files, setFiles] = React.useState<File[]>([])
-  const [coverImage, setCoverImage] = React.useState<File | StoredImage | undefined>(undefined)
+  const [coverImage, setCoverImage] = React.useState<File | StoredFile | null>(null)
+  const [existingAttachments, setExistingAttachments] = React.useState<StoredFile[]>([])
   const [tagsInput, setTagsInput] = React.useState("")
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -121,7 +127,7 @@ export default function NewProjectPage() {
           form.setValue('owner', profile.nickname || user.email?.split('@')[0] || 'Anonymous')
         }
       } catch (error) {
-        console.error('Error fetching user nickname:', error)
+        // Silent error handling for security
         toast.error("Failed to fetch user information")
       }
     }
@@ -154,7 +160,7 @@ export default function NewProjectPage() {
 
         // Set cover image if it exists
         if (data.cover_image) {
-          setCoverImage(data.cover_image as StoredImage)
+          setCoverImage(data.cover_image as StoredFile)
         }
 
         form.reset({
@@ -172,12 +178,12 @@ export default function NewProjectPage() {
         // Set existing files if there are any attachments
         if (data.attachments?.length > 0) {
           setFiles([])  // Reset files since we're in edit mode
+          setExistingAttachments(data.attachments)
         }
 
         setTagsInput(data.tags?.join(', ') || '')
         setIsEditing(true)
       } catch (error) {
-        console.error('Error fetching project:', error)
         toast.error('Failed to fetch project')
         router.push('/projects')
       } finally {
@@ -200,48 +206,48 @@ export default function NewProjectPage() {
       let coverImageData = null
       if (coverImage) {
         try {
-          // If it's already a stored image and we're editing, keep it as is
-          if (!isEditing || coverImage instanceof File) {
-            if (coverImage instanceof File) {
-              if (coverImage.size > 10 * 1024 * 1024) {
-                throw new Error("Cover image is too large. Maximum size is 10MB")
-              }
+          // Check if it's a new file upload or existing stored file
+          if (!isEditing || !('url' in coverImage)) {
+            // This is a new File upload
+            const file = coverImage as File
+            if (file.size > 10 * 1024 * 1024) {
+              throw new Error("Cover image is too large. Maximum size is 10MB")
+            }
 
-              if (!coverImage.type.match(/^image\/(jpeg|png|gif|webp)$/)) {
-                throw new Error("Cover image is not a supported image type")
-              }
+            if (!file.type.match(/^image\/(jpeg|png|gif|webp)$/)) {
+              throw new Error("Cover image is not a supported image type")
+            }
 
-              const timestamp = new Date().getTime()
-              const randomString = Math.random().toString(36).substring(2, 15)
-              const cleanFileName = coverImage.name.toLowerCase().replace(/[^a-z0-9.-]/g, '-')
-              const fileName = `${timestamp}-${randomString}-${cleanFileName}`
-              const filePath = `covers/${user.id}/${fileName}`
+            const timestamp = new Date().getTime()
+            const randomString = Math.random().toString(36).substring(2, 15)
+            const cleanFileName = file.name.toLowerCase().replace(/[^a-z0-9.-]/g, '-')
+            const fileName = `${timestamp}-${randomString}-${cleanFileName}`
+            const filePath = `covers/${user.id}/${fileName}`
 
-              const { error: uploadError, data: uploadData } = await supabase.storage
-                .from('project-attachments')
-                .upload(filePath, coverImage, {
-                  cacheControl: '3600',
-                  contentType: coverImage.type,
-                  upsert: false
-                })
+            const { error: uploadError, data: uploadData } = await supabase.storage
+              .from('project-attachments')
+              .upload(filePath, file, {
+                cacheControl: '3600',
+                contentType: file.type,
+                upsert: false
+              })
 
-              if (uploadError) throw uploadError
+            if (uploadError) throw uploadError
 
-              const { data: { publicUrl } } = supabase.storage
-                .from('project-attachments')
-                .getPublicUrl(filePath)
+            const { data: { publicUrl } } = supabase.storage
+              .from('project-attachments')
+              .getPublicUrl(filePath)
 
-              coverImageData = {
-                url: publicUrl,
-                name: coverImage.name,
-                type: coverImage.type,
-                size: coverImage.size,
-                path: filePath
-              }
+            coverImageData = {
+              url: publicUrl,
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              path: filePath
             }
           } else {
-            // If it's a stored image in edit mode, keep the existing data
-            coverImageData = coverImage as StoredImage
+            // This is an existing stored file
+            coverImageData = coverImage as StoredFile
           }
         } catch (error) {
           console.error('Cover image upload error:', error)
@@ -261,39 +267,39 @@ export default function NewProjectPage() {
               throw new Error(`File ${file.name} is too large. Maximum size is 10MB`)
             }
 
-            if (!file.type.match(/^image\/(jpeg|png|gif|webp)$/)) {
-              throw new Error(`File ${file.name} is not a supported image type`)
-            }
-
             const timestamp = new Date().getTime()
             const randomString = Math.random().toString(36).substring(2, 15)
             const cleanFileName = file.name.toLowerCase().replace(/[^a-z0-9.-]/g, '-')
             const fileName = `${timestamp}-${randomString}-${cleanFileName}`
             const filePath = `files/${user.id}/${fileName}`
 
+            // Force content type to application/octet-stream for better compatibility
             const { error: uploadError, data: uploadData } = await supabase.storage
               .from('project-attachments')
               .upload(filePath, file, {
                 cacheControl: '3600',
-                contentType: file.type,
+                contentType: 'application/octet-stream',
                 upsert: false
               })
 
-            if (uploadError) throw uploadError
+            if (uploadError) {
+              throw new Error(`Failed to upload ${file.name}: ${uploadError.message}`)
+            }
 
             const { data: { publicUrl } } = supabase.storage
               .from('project-attachments')
               .getPublicUrl(filePath)
 
-            uploadedFiles.push({
+            const fileData = {
               url: publicUrl,
               name: file.name,
               type: file.type,
               size: file.size,
               path: filePath
-            })
+            }
+            
+            uploadedFiles.push(fileData)
           } catch (fileError) {
-            console.error('File processing error:', fileError)
             toast.error(`Failed to upload ${file.name}`, {
               description: fileError instanceof Error ? fileError.message : "Upload failed"
             })
@@ -338,20 +344,19 @@ export default function NewProjectPage() {
             )
         )
         
-        const { error: updateError } = await supabase
+        const { error: updateError, data: updateResult } = await supabase
           .from('projects')
           .update(updateData)
           .eq('id', editId)
         error = updateError
       } else {
-        const { error: insertError } = await supabase
+        const { error: insertError, data: insertResult } = await supabase
           .from('projects')
           .insert(projectData)
         error = insertError
       }
 
       if (error) {
-        console.error('Database error:', error)
         throw error
       }
 
@@ -372,14 +377,9 @@ export default function NewProjectPage() {
     }
   }
 
-  const handleCoverImageChange = (file: File | undefined) => {
-    if (file) {
-      setCoverImage(file)
-      form.setValue('cover_image', file)
-    } else {
-      setCoverImage(undefined)
-      form.setValue('cover_image', undefined)
-    }
+  const handleCoverImageChange = (file: File | null) => {
+    setCoverImage(file)
+    form.setValue('cover_image', file)
   }
 
   return (
@@ -437,182 +437,284 @@ export default function NewProjectPage() {
                         </div>
                         <h2 className="text-xl font-semibold">Project Information</h2>
                       </div>
-                      <div className="ml-auto flex items-center gap-2">
-                        <Popover>
-                          <PopoverTrigger asChild>
+                      <div className="ml-auto flex items-center gap-4">
+                        {/* Cover Image Dropdown */}
+                        <Collapsible>
+                          <CollapsibleTrigger asChild>
                             <Button
+                              type="button"
                               variant="outline"
                               size="sm"
-                              className="flex items-center gap-2 border-blue-200 hover:bg-blue-50 transition-colors"
+                              className="flex items-center gap-2 border-blue-200 hover:bg-blue-50"
                             >
                               <Upload className="h-4 w-4 text-blue-500" />
                               <span className="text-sm text-blue-600">Cover Image</span>
                               {coverImage && (
-                                <Badge 
-                                  variant="secondary" 
-                                  className="ml-1 bg-blue-100 text-blue-600"
-                                >
-                                  1
-                                </Badge>
+                                <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-600">1</Badge>
                               )}
+                              <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-200 ease-in-out group-data-[state=open]:rotate-180" />
                             </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 p-4" align="end">
-                            <div className="space-y-4">
-                              <div 
-                                className="relative group flex flex-col items-center justify-center h-40 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/30 px-4 py-4 text-center transition-all hover:border-blue-400 hover:bg-blue-50/50"
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  const file = Array.from(e.dataTransfer.files).find(
-                                    file => file.type.startsWith('image/')
-                                  );
-                                  if (file) {
-                                    handleCoverImageChange(file);
-                                  }
-                                }}
-                              >
-                                {coverImage ? (
-                                  <div className="relative w-full h-full">
-                                    <img
-                                      src={
-                                        coverImage instanceof File 
-                                          ? URL.createObjectURL(coverImage)
-                                          : (coverImage as StoredImage).url
-                                      }
-                                      alt="Cover preview"
-                                      className="w-full h-full object-cover rounded-lg"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="destructive"
-                                      size="icon"
-                                      className="absolute top-2 right-2 h-6 w-6"
-                                      onClick={() => {
-                                        if (coverImage instanceof File) {
-                                          URL.revokeObjectURL(URL.createObjectURL(coverImage))
-                                        }
-                                        handleCoverImageChange(undefined)
-                                      }}
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <Upload className="h-8 w-8 text-blue-500 group-hover:text-blue-600 transition-colors" />
-                                    <div className="mt-2">
-                                      <span className="text-sm font-medium text-blue-600">Add a cover image</span>
-                                      <p className="text-xs text-blue-400 mt-1">Supports: JPG, PNG, GIF (Max 10MB)</p>
-                                    </div>
-                                    <Input 
-                                      type="file"
-                                      accept="image/*"
-                                      className="absolute inset-0 cursor-pointer opacity-0"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file && file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
-                                          handleCoverImageChange(file);
-                                        }
-                                      }}
-                                    />
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center gap-2 border-blue-200 hover:bg-blue-50 transition-colors"
-                            >
-                              <Upload className="h-4 w-4 text-blue-500" />
-                              <span className="text-sm text-blue-600">Add Attachments</span>
-                              {files.length > 0 && (
-                                <Badge 
-                                  variant="secondary" 
-                                  className="ml-1 bg-blue-100 text-blue-600"
-                                >
-                                  {files.length}
-                                </Badge>
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-96 p-4" align="end">
-                            <div className="space-y-4">
-                              <div 
-                                className="relative group flex flex-col items-center justify-center h-32 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/30 px-4 py-4 text-center transition-all hover:border-blue-400 hover:bg-blue-50/50"
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  const droppedFiles = Array.from(e.dataTransfer.files).filter(
-                                    file => file.type.startsWith('image/')
-                                  );
-                                  setFiles(prev => [...prev, ...droppedFiles]);
-                                }}
-                              >
-                                <div className="flex flex-col items-center gap-2">
-                                  <Upload className="h-8 w-8 text-blue-500 group-hover:text-blue-600 transition-colors" />
-                                  <div className="flex flex-col items-center gap-1">
-                                    <span className="text-sm font-medium text-blue-600">Drop images here or click to upload</span>
-                                    <span className="text-xs text-blue-400">Supports: JPG, PNG, GIF (Max 10MB)</span>
-                                  </div>
-                                </div>
-                                <Input 
-                                  type="file"
-                                  accept="image/*"
-                                  className="absolute inset-0 cursor-pointer opacity-0"
-                                  onChange={(e) => {
-                                    if (e.target.files) {
-                                      const newFiles = Array.from(e.target.files).filter(
-                                        file => file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024
-                                      );
-                                      setFiles(prev => [...prev, ...newFiles]);
-                                    }
-                                  }}
-                                  multiple
-                                />
-                              </div>
-                              {files.length > 0 && (
-                                <div className="grid grid-cols-2 gap-2">
-                                  {files.map((file, index) => (
-                                    <div 
-                                      key={index}
-                                      className="group relative aspect-square rounded-lg border bg-white shadow-sm overflow-hidden"
-                                    >
-                                      <img
-                                        src={URL.createObjectURL(file)}
-                                        alt={file.name}
-                                        className="h-full w-full object-cover"
-                                      />
-                                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="absolute mt-2 w-80 rounded-lg border bg-white p-2 shadow-lg">
+                            <FormField
+                              control={form.control}
+                              name="cover_image"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <div className="flex flex-col gap-2">
+                                      <label htmlFor="cover-image" className="group relative">
+                                        <Input
+                                          id="cover-image"
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0]
+                                            if (file && file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
+                                              handleCoverImageChange(file)
+                                            } else {
+                                              toast.error("Invalid file. Please select an image under 10MB.")
+                                            }
+                                            e.target.value = ''
+                                          }}
+                                        />
                                         <Button
                                           type="button"
-                                          variant="destructive"
-                                          size="icon"
-                                          className="h-6 w-6"
-                                          onClick={() => {
-                                            URL.revokeObjectURL(URL.createObjectURL(file));
-                                            setFiles(prev => prev.filter((_, i) => i !== index));
-                                          }}
+                                          variant="outline"
+                                          className="w-full justify-center gap-2"
+                                          onClick={() => document.getElementById('cover-image')?.click()}
                                         >
-                                          <X className="h-3 w-3" />
+                                          <Upload className="h-4 w-4" />
+                                          Choose Image
                                         </Button>
-                                      </div>
-                                      <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-1">
-                                        <p className="text-xs text-white truncate">{file.name}</p>
-                                      </div>
+                                      </label>
+                                      {coverImage && (
+                                        <div className="flex items-center gap-2 rounded-lg border bg-white p-2">
+                                          <img
+                                            src={'url' in coverImage ? coverImage.url : URL.createObjectURL(coverImage)}
+                                            alt="Cover preview"
+                                            className="h-10 w-10 rounded object-cover"
+                                          />
+                                          <span className="text-sm text-slate-600 max-w-[100px] truncate">
+                                            {coverImage.name}
+                                          </span>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 text-red-600 hover:bg-red-50 ml-auto"
+                                            onClick={() => {
+                                              if (!('url' in coverImage)) {
+                                                URL.revokeObjectURL(URL.createObjectURL(coverImage))
+                                              }
+                                              handleCoverImageChange(null)
+                                            }}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      )}
                                     </div>
-                                  ))}
-                                </div>
+                                  </FormControl>
+                                </FormItem>
                               )}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                            />
+                          </CollapsibleContent>
+                        </Collapsible>
+
+                        {/* Attachments Dropdown */}
+                        <Collapsible>
+                          <CollapsibleTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-2 border-blue-200 hover:bg-blue-50"
+                            >
+                              <Upload className="h-4 w-4 text-blue-500" />
+                              <span className="text-sm text-blue-600">Attachments</span>
+                              {(files.length > 0 || existingAttachments.length > 0) && (
+                                <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-600">
+                                  {files.length + existingAttachments.length}
+                                </Badge>
+                              )}
+                              <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-200 ease-in-out group-data-[state=open]:rotate-180" />
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="absolute mt-2 w-80 rounded-lg border bg-white p-2 shadow-lg">
+                            <FormField
+                              control={form.control}
+                              name="attachments"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <div className="flex flex-col gap-2">
+                                      <label htmlFor="attachments" className="group relative">
+                                        <Input
+                                          id="attachments"
+                                          type="file"
+                                          multiple
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            if (e.target.files) {
+                                              const supportedExtensions = [
+                                                '.jpg', '.jpeg', '.png', '.gif', '.webp',
+                                                '.pdf', '.txt', '.doc', '.docx',
+                                                '.xls', '.xlsx', '.ppt', '.pptx',
+                                                '.odt', '.ods', '.odp',
+                                                '.csv', '.json', '.zip'
+                                              ]
+
+                                              const newFiles = Array.from(e.target.files).filter(file => {
+                                                if (file.size > 10 * 1024 * 1024) {
+                                                  toast.error(`${file.name} is too large. Maximum size is 10MB.`)
+                                                  return false
+                                                }
+                                                const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
+                                                if (!supportedExtensions.includes(fileExtension)) {
+                                                  toast.error(`${file.name} type is not supported. Supported types are: images, PDF, Office documents, text files, and archives.`)
+                                                  return false
+                                                }
+                                                return true
+                                              })
+
+                                              if (newFiles.length > 0) {
+                                                setFiles(prev => [...prev, ...newFiles])
+                                              }
+                                            }
+                                            e.target.value = ''
+                                          }}
+                                        />
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          className="w-full justify-center gap-2"
+                                          onClick={() => document.getElementById('attachments')?.click()}
+                                        >
+                                          <Upload className="h-4 w-4" />
+                                          Choose Files
+                                        </Button>
+                                      </label>
+
+                                      {/* Show existing attachments */}
+                                      {isEditing && existingAttachments.length > 0 && (
+                                        <div className="space-y-2">
+                                          <div className="px-2 py-1 text-xs font-medium text-slate-500">
+                                            Existing Attachments
+                                          </div>
+                                          {existingAttachments.map((file, index) => (
+                                            <div key={index} className="flex items-center gap-2 rounded-lg border bg-white p-2">
+                                              <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100">
+                                                {file.type?.startsWith('image/') ? (
+                                                  <img
+                                                    src={file.url}
+                                                    alt={file.name}
+                                                    className="h-10 w-10 rounded object-cover"
+                                                  />
+                                                ) : (
+                                                  <div className="flex h-full w-full items-center justify-center rounded bg-slate-100 text-slate-500">
+                                                    {file.type?.includes('pdf') ? (
+                                                      <FileText className="h-5 w-5" />
+                                                    ) : file.type?.includes('excel') || file.type?.includes('sheet') ? (
+                                                      <Table className="h-5 w-5" />
+                                                    ) : file.type?.includes('word') || file.type?.includes('document') ? (
+                                                      <FileText className="h-5 w-5" />
+                                                    ) : (
+                                                      <File className="h-5 w-5" />
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <div className="flex flex-col min-w-0">
+                                                <span className="text-sm font-medium text-slate-900 truncate">
+                                                  {file.name}
+                                                </span>
+                                                <span className="text-xs text-slate-500">
+                                                  {(file.size / 1024 / 1024).toFixed(2)} MB
+                                                </span>
+                                              </div>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-red-600 hover:bg-red-50"
+                                                onClick={() => {
+                                                  setExistingAttachments(prev => prev.filter((_, i) => i !== index))
+                                                  form.setValue('attachments', existingAttachments.filter((_, i) => i !== index))
+                                                }}
+                                              >
+                                                <X className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {/* Show new files being added */}
+                                      {files.length > 0 && (
+                                        <div className="space-y-2">
+                                          {!isEditing && (
+                                            <div className="px-2 py-1 text-xs font-medium text-slate-500">
+                                              New Attachments
+                                            </div>
+                                          )}
+                                          {files.map((file, index) => (
+                                            <div key={index} className="flex items-center gap-2 rounded-lg border bg-white p-2">
+                                              <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100">
+                                                {file.type.startsWith('image/') ? (
+                                                  <img
+                                                    src={URL.createObjectURL(file)}
+                                                    alt={file.name}
+                                                    className="h-10 w-10 rounded object-cover"
+                                                  />
+                                                ) : (
+                                                  <div className="flex h-full w-full items-center justify-center rounded bg-slate-100 text-slate-500">
+                                                    {file.type.includes('pdf') ? (
+                                                      <FileText className="h-5 w-5" />
+                                                    ) : file.type.includes('excel') || file.type.includes('sheet') ? (
+                                                      <Table className="h-5 w-5" />
+                                                    ) : file.type.includes('word') || file.type.includes('document') ? (
+                                                      <FileText className="h-5 w-5" />
+                                                    ) : (
+                                                      <File className="h-5 w-5" />
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <div className="flex flex-col min-w-0">
+                                                <span className="text-sm font-medium text-slate-900 truncate">
+                                                  {file.name}
+                                                </span>
+                                                <span className="text-xs text-slate-500">
+                                                  {(file.size / 1024 / 1024).toFixed(2)} MB
+                                                </span>
+                                              </div>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-red-600 hover:bg-red-50"
+                                                onClick={() => {
+                                                  if (file.type.startsWith('image/')) {
+                                                    URL.revokeObjectURL(URL.createObjectURL(file))
+                                                  }
+                                                  setFiles(prev => prev.filter((_, i) => i !== index))
+                                                }}
+                                              >
+                                                <X className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </CollapsibleContent>
+                        </Collapsible>
                       </div>
                     </div>
 
