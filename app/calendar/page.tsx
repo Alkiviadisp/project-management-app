@@ -20,6 +20,8 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import { EventContentArg } from '@fullcalendar/core'
 import { Badge } from "@/components/ui/badge"
+import resourceTimelinePlugin from '@fullcalendar/resource-timeline'
+import resourceDayGridPlugin from '@fullcalendar/resource-daygrid'
 
 type Project = {
   id: string
@@ -32,10 +34,19 @@ type Project = {
   updated_at: string
 }
 
+type Task = {
+  id: string
+  title: string
+  status: "todo" | "in-progress" | "done"
+  due_date: string
+  project_id: string
+}
+
 type CalendarView = 'dayGridMonth' | 'dayGridWeek' | 'dayGridDay'
 
 function CalendarContent() {
   const [projects, setProjects] = React.useState<Project[]>([])
+  const [tasks, setTasks] = React.useState<Task[]>([])
   const [view, setView] = React.useState<CalendarView>('dayGridMonth')
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(null)
   const [isViewTransitioning, setIsViewTransitioning] = React.useState(false)
@@ -44,6 +55,17 @@ function CalendarContent() {
   const calendarRef = React.useRef<any>(null)
   const resizeTimeoutRef = React.useRef<NodeJS.Timeout>()
   const [isTransitioning, setIsTransitioning] = React.useState(false)
+  const [projectColors, setProjectColors] = React.useState(new Map<string, string>())
+
+  // Update project colors whenever projects change
+  React.useEffect(() => {
+    const newProjectColors = new Map<string, string>();
+    projects.forEach((project, index) => {
+      const color = getEventColor(project.priority, project.status, index);
+      newProjectColors.set(project.id, color);
+    });
+    setProjectColors(newProjectColors);
+  }, [projects]);
 
   // Handle view changes with animation
   const handleViewChange = (newView: CalendarView) => {
@@ -130,62 +152,195 @@ function CalendarContent() {
   }, [sidebar.state])
 
   const fetchProjects = async () => {
-    const { data: projects, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false })
+    try {
+      // Fetch projects
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('Error fetching projects:', error)
-      return
+      if (projectsError) throw projectsError
+
+      // Fetch tasks
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (tasksError) throw tasksError
+
+      setProjects(projectsData || [])
+      setTasks(tasksData || [])
+    } catch (error) {
+      console.error('Error:', error)
     }
-
-    setProjects(projects || [])
   }
 
   const getEventColor = (priority: string, status: string, index: number) => {
-    // First 4 projects use specific colors in order
-    if (index < 4) {
-      switch(index) {
-        case 0: return 'rgb(0, 224, 116)'    // Green
-        case 1: return 'rgb(0, 195, 255)'    // Blue
-        case 2: return 'rgb(255, 227, 227)'  // Pink/Red
-        case 3: return 'rgb(255, 250, 196)'  // Yellow
+    // Project colors for timelines
+    const projectColors = [
+      "#FF0F7B", // Vibrant Pink
+      "#00C2FF", // Electric Blue
+      "#01E076", // Bright Green
+      "#FFB300", // Amber
+      "#6C5CE7", // Bright Purple
+      "#FF3860", // Strong Red
+      "#3D5AFE", // Intense Blue
+      "#00B8D4", // Cyan
+      "#FF9100", // Orange
+    ];
+
+    // Use index to cycle through colors
+    return projectColors[index % projectColors.length];
+  }
+
+  const calendarEvents = React.useMemo(() => {
+    type CalendarEvent = {
+      id: string;
+      title: string;
+      start: Date;
+      end: Date;
+      backgroundColor: string;
+      borderColor: string;
+      textColor: string;
+      classNames?: string[];
+      extendedProps: {
+        type: 'task';
+        status: string;
+        projectId: string;
+        tasks?: { id: string; title: string; status: string }[];
+        totalTasks?: number;
+      };
+    };
+
+    const events: CalendarEvent[] = [];
+    const tasksByDate = new Map<string, Map<string, Task[]>>();
+
+    // Group tasks by date and project, excluding done tasks
+    tasks.filter(task => task.status !== 'done').forEach((task) => {
+      if (!task.due_date) return;
+      const dateKey = task.due_date.split('T')[0];
+      
+      if (!tasksByDate.has(dateKey)) {
+        tasksByDate.set(dateKey, new Map());
       }
-    }
-    
-    // Additional projects use these colors
-    switch (priority) {
-      case 'low': return 'rgb(147, 51, 234)'     // Purple
-      case 'medium': return 'rgb(236, 72, 153)'   // Pink
-      case 'high': return 'rgb(249, 115, 22)'     // Orange
-      default: return 'rgb(71, 85, 105)'          // Slate
-    }
-  }
+      
+      const projectTasks = tasksByDate.get(dateKey)!;
+      if (!projectTasks.has(task.project_id)) {
+        projectTasks.set(task.project_id, []);
+      }
+      
+      projectTasks.get(task.project_id)!.push(task);
+    });
 
-  const calendarEvents = projects.map((project, index) => ({
+    // Create events for each project's tasks on each date
+    tasksByDate.forEach((projectTasks, dateKey) => {
+      projectTasks.forEach((tasks, projectId) => {
+        const color = projectColors.get(projectId) || '#000000';
+        const visibleTasks = tasks.slice(0, 2);
+        const remainingCount = Math.max(0, tasks.length - 2);
+        
+        events.push({
+          id: `tasks-${projectId}-${dateKey}`,
+          title: visibleTasks.map(t => t.title).join(' • ') + (remainingCount > 0 ? ` (+${remainingCount} more)` : ''),
+          start: new Date(dateKey),
+          end: new Date(dateKey),
+          backgroundColor: color,
+          borderColor: color,
+          textColor: 'white',
+          classNames: ['task-event'],
+          extendedProps: {
+            type: 'task',
+            status: tasks[0].status,
+            projectId: projectId,
+            tasks: tasks,
+            totalTasks: tasks.length
+          }
+        });
+      });
+    });
+
+    return events;
+  }, [tasks, projectColors]);
+
+  // Create resources from projects
+  const resources = projects.map(project => ({
     id: project.id,
-    title: project.title,
-    start: new Date(project.created_at),
-    end: new Date(project.due_date),
-    backgroundColor: getEventColor(project.priority, project.status, index),
-    borderColor: 'transparent',
-    extendedProps: {
-      description: project.description,
-      status: project.status,
-      priority: project.priority
-    }
-  }))
+    title: project.title
+  }));
 
-  const handleEventClick = (info: { event: { id: string } }) => {
-    setSelectedProjectId(info.event.id)
+  const handleEventClick = (info: { event: { id: string; extendedProps: { projectId?: string } } }) => {
+    // If clicking a task, select its project
+    const projectId = info.event.extendedProps.projectId || info.event.id;
+    setSelectedProjectId(projectId.startsWith('title-') ? projectId.replace('title-', '') : projectId);
   }
+
+  const eventContent = (arg: EventContentArg) => {
+    const isTask = arg.event.extendedProps.type === 'task';
+    const isSelected = selectedProjectId === (isTask ? arg.event.extendedProps.projectId : arg.event.id);
+    const tasks = arg.event.extendedProps.tasks || [];
+    const visibleTasks = tasks.slice(0, 2);
+    const remainingTasks = tasks.slice(2);
+    const remainingCount = remainingTasks.length;
+    
+    return (
+      <div className={cn(
+        "flex flex-col gap-1 p-1 transition-all duration-200 h-full w-full relative group",
+        isTask ? "text-xs" : "text-sm font-medium"
+      )}>
+        {visibleTasks.map((task: { id: string; title: string }) => (
+          <div 
+            key={task.id}
+            className={cn(
+              "px-2 py-1 rounded-full transition-transform duration-300",
+              isSelected && "scale-105 transform"
+            )}
+            style={{
+              backgroundColor: arg.event.backgroundColor,
+              color: 'white'
+            }}
+          >
+            <span className="truncate block">{task.title}</span>
+          </div>
+        ))}
+
+        {/* More tasks indicator and dropdown */}
+        {remainingCount > 0 && (
+          <div className="relative">
+            <div 
+              className={cn(
+                "px-2 py-0.5 text-center text-xs cursor-pointer",
+                "text-gray-600 hover:text-gray-900"
+              )}
+            >
+              +{remainingCount} more
+            </div>
+            {/* Dropdown */}
+            <div className="absolute left-0 top-full mt-1 w-full max-w-[250px] bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50 invisible group-hover:visible">
+              {remainingTasks.map((task: { id: string; title: string }) => (
+                <div
+                  key={task.id}
+                  className="px-2 py-1 mx-2 my-1 rounded-full text-sm"
+                  style={{
+                    backgroundColor: arg.event.backgroundColor,
+                    color: 'white'
+                  }}
+                >
+                  {task.title}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
       <AppSidebar className="hidden lg:block" />
       <SidebarInset className="bg-gradient-to-br from-white to-blue-50/20">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center justify-between border-b bg-white px-6">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-4 h-6" />
@@ -219,13 +374,13 @@ function CalendarContent() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="relative flex-1">
           <div className={cn(
-            "grid grid-cols-1 gap-6 transition-all duration-500 ease-in-out will-change-[margin,width]",
+            "grid grid-cols-1 gap-6 p-6 transition-all duration-500 ease-in-out will-change-[margin,width]",
             sidebar.state === "expanded" ? "lg:ml-0" : "lg:ml-8"
           )}>
             <div className={cn(
-              "rounded-xl border bg-white p-6 shadow-sm transition-all duration-500 ease-in-out transform",
+              "rounded-xl border bg-white shadow-sm transition-all duration-500 ease-in-out transform",
               isTransitioning && "scale-[0.999]"
             )}>
               <div className={cn(
@@ -233,126 +388,146 @@ function CalendarContent() {
                 isViewTransitioning && "opacity-0 scale-98"
               )}>
                 <style jsx global>{`
-                  /* Enhanced transitions for view changes */
+                  /* Calendar Styling */
                   .fc-view-harness {
-                    transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    background: white;
                   }
 
-                  .fc-view-harness-active > div {
-                    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                  /* Make header section sticky */
+                  .fc .fc-scrollgrid-section-header {
+                    position: sticky;
+                    top: 64px; /* height of the header */
+                    z-index: 40;
+                    background: rgb(255 255 255 / 1.0);
                   }
 
-                  /* Prevent flickering during transitions */
-                  .fc .fc-view-harness {
-                    transform-style: preserve-3d;
-                    perspective: 1000px;
-                    backface-visibility: hidden;
+                  .fc .fc-scrollgrid-section-header table {
+                    border-bottom: 1px solid #e5e7eb;
+                    background: rgb(255 255 255 / 1.0);
                   }
 
-                  .fc-view-harness-active > div > * {
-                    backface-visibility: hidden;
-                    transform: translateZ(0);
+                  .fc .fc-col-header-cell {
+                    background: rgb(255 255 255 / 1.0);
                   }
 
-                  /* Smooth height transitions */
-                  .fc-view-harness {
-                    transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                  .fc-theme-standard .fc-scrollgrid {
+                    border: none;
                   }
 
-                  /* Make day/week view cells much larger */
-                  .fc-dayGridWeek-view .fc-daygrid-day,
-                  .fc-dayGridDay-view .fc-daygrid-day {
-                    min-height: 400px !important;
+                  /* Task Event */
+                  .task-event {
+                    margin: 1px 4px;
+                    padding: 2px;
+                    border-radius: 4px;
+                    border: none !important;
+                    background: transparent !important;
+                    max-width: 100% !important;
+                    overflow: visible !important;
+                    z-index: 1;
                   }
 
-                  /* Month view more compact */
+                  .task-event:hover {
+                    z-index: 10;
+                  }
+
+                  .fc-event {
+                    background: none;
+                    border: none;
+                    max-width: 100%;
+                  }
+
+                  .fc-event-main {
+                    padding: 0;
+                    max-width: 100%;
+                  }
+
+                  .fc-event-main-frame {
+                    height: 100%;
+                    max-width: 100%;
+                  }
+
+                  /* Calendar Layout */
                   .fc-dayGridMonth-view .fc-daygrid-day {
-                    min-height: 80px !important;
-                    max-height: 80px !important;
+                    height: auto !important;
+                    min-height: 120px !important;
                   }
 
                   .fc-dayGridMonth-view .fc-daygrid-day-frame {
-                    min-height: unset !important;
-                    padding: 2px !important;
-                  }
-
-                  .fc-dayGridMonth-view .fc-daygrid-day-events {
-                    min-height: unset !important;
-                    padding: 0 2px !important;
-                  }
-
-                  .fc-dayGridMonth-view .fc-daygrid-day-top {
-                    padding: 2px !important;
-                  }
-
-                  /* Improve cell content layout for week/day */
-                  .fc-dayGridWeek-view .fc-daygrid-day-frame,
-                  .fc-dayGridDay-view .fc-daygrid-day-frame {
                     min-height: 100% !important;
-                    padding: 12px !important;
                   }
 
-                  .fc-dayGridWeek-view .fc-daygrid-day-events,
-                  .fc-dayGridDay-view .fc-daygrid-day-events {
-                    min-height: 85% !important;
-                    padding: 12px !important;
+                  .fc-daygrid-event-harness {
+                    margin: 2px 0 !important;
                   }
 
-                  /* Month view specific event styling */
-                  .fc-dayGridMonth-view .fc-daygrid-event {
-                    margin: 1px 0 !important;
-                    padding: 1px 4px !important;
-                    min-height: 18px !important;
-                    font-size: 0.75rem !important;
+                  .fc-daygrid-day-events {
+                    padding: 2px !important;
                   }
 
-                  /* Week/Day view specific event styling */
-                  .fc-dayGridWeek-view .fc-daygrid-event,
-                  .fc-dayGridDay-view .fc-daygrid-event {
-                    margin: 6px 0 !important;
-                    padding: 8px 12px !important;
-                    min-height: 50px !important;
-                    display: flex !important;
-                    align-items: center !important;
+                  /* Improve day header appearance */
+                  .fc .fc-daygrid-day-top {
+                    flex-direction: row;
+                    padding: 4px;
+                  }
+
+                  .fc .fc-daygrid-day-number {
+                    font-weight: 500;
+                  }
+
+                  /* Add shadow to sticky header */
+                  .fc .fc-scrollgrid-section-header {
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+                  }
+
+                  /* Fix scrolling container */
+                  .fc-scroller {
+                    overflow: visible !important;
+                    height: auto !important;
+                  }
+
+                  .fc-scroller-liquid-absolute {
+                    position: static !important;
+                    top: auto !important;
+                    left: auto !important;
+                    right: auto !important;
+                    bottom: auto !important;
                   }
                 `}</style>
                 <FullCalendar
                   ref={calendarRef}
-                  plugins={[dayGridPlugin, interactionPlugin]}
+                  plugins={[dayGridPlugin, interactionPlugin, resourceDayGridPlugin]}
                   initialView={view}
                   events={calendarEvents}
+                  resources={resources}
+                  resourceOrder="title"
                   headerToolbar={false}
                   height="auto"
                   eventClick={handleEventClick}
                   firstDay={1}
                   expandRows={true}
-                  dayMaxEvents={view === 'dayGridMonth' ? 3 : 12}
+                  dayMaxEvents={false}
                   views={{
                     dayGridMonth: {
-                      dayMaxEvents: 3,
+                      type: 'dayGridMonth',
+                      dayMaxEvents: false,
                     },
                     dayGridWeek: {
+                      type: 'dayGridWeek',
                       dayHeaderFormat: { weekday: 'short', day: 'numeric' },
-                      dayMaxEvents: 12,
-                      eventMinHeight: 50,
+                      dayMaxEvents: false,
+                      eventMinHeight: 30,
                     },
                     dayGridDay: {
-                      dayMaxEvents: 15,
-                      eventMinHeight: 50,
+                      type: 'dayGridDay',
+                      dayMaxEvents: false,
+                      eventMinHeight: 30,
                     }
                   }}
-                  eventContent={(arg: EventContentArg) => (
-                    <div className={cn(
-                      "p-2 text-sm rounded cursor-pointer transition-all duration-200 hover:opacity-90 hover:scale-[1.02]",
-                      arg.event.extendedProps.status === 'done' && "line-through opacity-70",
-                      view !== 'dayGridMonth' && "min-h-[40px] flex items-center",
-                      selectedProjectId === arg.event.id 
-                        ? "text-black dark:text-white font-bold text-[1.1em]" 
-                        : "text-white font-medium"
-                    )}>
-                      {arg.event.title}
-                    </div>
-                  )}
+                  eventContent={eventContent}
+                  schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
+                  resourceAreaWidth={0}
+                  slotMinWidth={0}
+                  resourceLabelDidMount={() => {}}
                 />
               </div>
             </div>
@@ -370,48 +545,51 @@ function CalendarContent() {
                 <span className="text-sm text-muted-foreground">{projects.length} projects</span>
               </div>
               <div className="divide-y">
-                {projects.map((project) => (
-                  <div
-                    key={project.id}
-                    onClick={() => setSelectedProjectId(project.id)}
-                    className={cn(
-                      "flex items-center justify-between px-4 py-2 transition-colors hover:bg-slate-50 cursor-pointer",
-                      selectedProjectId === project.id && "bg-slate-50"
-                    )}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={cn(
-                        "h-2 w-2 flex-shrink-0 rounded-full",
-                        project.status === 'todo' && "bg-slate-400",
-                        project.status === 'in-progress' && "bg-blue-400",
-                        project.status === 'done' && "bg-green-400"
-                      )} />
-                      <span className={cn(
-                        "font-medium truncate",
-                        project.status === 'done' && "line-through text-muted-foreground",
-                        selectedProjectId === project.id && "font-bold"
-                      )}>
-                        {project.title}
-                      </span>
-                      <Badge variant="secondary" className={cn(
-                        "px-2 py-0.5 text-xs",
-                        project.priority === 'low' && "bg-green-100 text-green-700",
-                        project.priority === 'medium' && "bg-yellow-100 text-yellow-700",
-                        project.priority === 'high' && "bg-red-100 text-red-700"
-                      )}>
-                        {project.priority}
-                      </Badge>
+                {projects.map((project) => {
+                  const projectColor = projectColors.get(project.id) || '#000000';
+                  return (
+                    <div
+                      key={project.id}
+                      onClick={() => setSelectedProjectId(project.id)}
+                      className={cn(
+                        "flex items-center justify-between px-4 py-2 transition-colors cursor-pointer bg-white hover:bg-gray-50",
+                        selectedProjectId === project.id && "bg-gray-50"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div 
+                          className={cn(
+                            "px-3 py-1 rounded-full font-medium truncate",
+                            project.status === 'done' && "line-through opacity-70",
+                            selectedProjectId === project.id && "shadow-md"
+                          )}
+                          style={{
+                            backgroundColor: projectColor,
+                            color: 'white'
+                          }}
+                        >
+                          {project.title}
+                        </div>
+                        <Badge variant="secondary" className={cn(
+                          "px-2 py-0.5 text-xs rounded-full",
+                          project.priority === 'low' && "bg-green-100 text-green-700",
+                          project.priority === 'medium' && "bg-yellow-100 text-yellow-700",
+                          project.priority === 'high' && "bg-red-100 text-red-700"
+                        )}>
+                          {project.priority}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className={cn(
+                          "text-xs text-gray-600",
+                          new Date() > new Date(project.due_date) && project.status !== 'done' && "text-red-600 font-bold"
+                        )}>
+                          Due {format(new Date(project.due_date), 'MMM d')}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 flex-shrink-0 text-sm text-muted-foreground">
-                      <span className={cn(
-                        "text-xs",
-                        new Date() > new Date(project.due_date) && project.status !== 'done' && "text-red-600 font-medium"
-                      )}>
-                        Due {format(new Date(project.due_date), 'MMM d')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

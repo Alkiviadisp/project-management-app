@@ -793,10 +793,36 @@ export default function ProjectDetailsPage() {
                                       mode="single"
                                       selected={field.value}
                                       onSelect={field.onChange}
-                                      disabled={(date) =>
-                                        date < new Date(new Date().setHours(0, 0, 0, 0))
-                                      }
                                       initialFocus
+                                      fromDate={new Date()}
+                                      disabled={(date) => {
+                                        const today = new Date()
+                                        today.setHours(0, 0, 0, 0)
+                                        return date < today
+                                      }}
+                                      className="rounded-md border p-3"
+                                      classNames={{
+                                        months: "space-y-4",
+                                        month: "space-y-4",
+                                        caption: "flex justify-center pt-1 relative items-center",
+                                        caption_label: "text-sm font-medium",
+                                        nav: "space-x-1 flex items-center",
+                                        nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+                                        nav_button_previous: "absolute left-1",
+                                        nav_button_next: "absolute right-1",
+                                        table: "w-full border-collapse",
+                                        head_row: "flex",
+                                        head_cell: "w-9 font-medium text-slate-500 rounded-md",
+                                        row: "flex w-full mt-2",
+                                        cell: "w-9 h-9 text-center text-sm relative p-0 rounded-md hover:bg-slate-100 focus-within:relative focus-within:z-20",
+                                        day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100",
+                                        day_range_end: "day-range-end",
+                                        day_selected: "bg-blue-600 text-white hover:bg-blue-600 hover:text-white focus:bg-blue-600 focus:text-white",
+                                        day_today: "bg-slate-100",
+                                        day_outside: "opacity-50",
+                                        day_disabled: "opacity-50 cursor-not-allowed",
+                                        day_hidden: "invisible",
+                                      }}
                                     />
                                   </PopoverContent>
                                 </Popover>
@@ -840,11 +866,11 @@ export default function ProjectDetailsPage() {
                   </div>
                 )}
 
-                {sortedTasks.map((task) => (
+                {sortedTasks.map((task: Task) => (
                   <div
                     key={task.id}
                     className={cn(
-                      "group relative overflow-hidden rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100",
+                      "group relative overflow-visible rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100",
                       task.due_date && new Date() > new Date(task.due_date) && task.status !== 'done' && "bg-red-50/50 border-red-100",
                       task.status === 'done' && !task.due_date && "bg-slate-50/50",
                       task.status === 'in-progress' && !task.due_date && "bg-blue-50/50"
@@ -853,27 +879,29 @@ export default function ProjectDetailsPage() {
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-50/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                     
                     {/* Action Buttons */}
-                    <div className="absolute right-4 top-4 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="absolute right-4 top-4 z-10 flex items-center gap-2 invisible group-hover:visible">
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => {
-                          setEditingTask(task)
-                          setIsDialogOpen(true)
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTask(task);
+                          setIsDialogOpen(true);
                         }}
-                        className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-blue-50 hover:shadow-md"
+                        className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-blue-50 hover:shadow-md cursor-pointer"
                       >
                         <Pencil className="h-4 w-4 text-blue-600" />
                       </Button>
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (window.confirm('Are you sure you want to delete this task?')) {
-                            deleteTask(task.id)
+                            deleteTask(task.id);
                           }
                         }}
-                        className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-red-50 hover:shadow-md"
+                        className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-red-50 hover:shadow-md cursor-pointer"
                       >
                         <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
