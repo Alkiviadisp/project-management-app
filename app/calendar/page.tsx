@@ -143,23 +143,33 @@ function CalendarContent() {
     setProjects(projects || [])
   }
 
-  const getEventColor = (priority: string, status: string) => {
-    if (status === 'done') return '#10B981' // Green for completed
+  const getEventColor = (priority: string, status: string, index: number) => {
+    // First 4 projects use specific colors in order
+    if (index < 4) {
+      switch(index) {
+        case 0: return 'rgb(0, 224, 116)'    // Green
+        case 1: return 'rgb(0, 195, 255)'    // Blue
+        case 2: return 'rgb(255, 227, 227)'  // Pink/Red
+        case 3: return 'rgb(255, 250, 196)'  // Yellow
+      }
+    }
+    
+    // Additional projects use these colors
     switch (priority) {
-      case 'low': return '#4ADE80'
-      case 'medium': return '#FCD34D'
-      case 'high': return '#EF4444'
-      default: return '#6B7280'
+      case 'low': return 'rgb(147, 51, 234)'     // Purple
+      case 'medium': return 'rgb(236, 72, 153)'   // Pink
+      case 'high': return 'rgb(249, 115, 22)'     // Orange
+      default: return 'rgb(71, 85, 105)'          // Slate
     }
   }
 
-  const calendarEvents = projects.map(project => ({
+  const calendarEvents = projects.map((project, index) => ({
     id: project.id,
     title: project.title,
     start: new Date(project.created_at),
     end: new Date(project.due_date),
-    backgroundColor: getEventColor(project.priority, project.status),
-    borderColor: getEventColor(project.priority, project.status),
+    backgroundColor: getEventColor(project.priority, project.status, index),
+    borderColor: 'transparent',
     extendedProps: {
       description: project.description,
       status: project.status,
@@ -333,9 +343,12 @@ function CalendarContent() {
                   }}
                   eventContent={(arg: EventContentArg) => (
                     <div className={cn(
-                      "p-2 text-sm font-medium text-white rounded cursor-pointer transition-all duration-200 hover:opacity-90 hover:scale-[1.02]",
+                      "p-2 text-sm rounded cursor-pointer transition-all duration-200 hover:opacity-90 hover:scale-[1.02]",
                       arg.event.extendedProps.status === 'done' && "line-through opacity-70",
-                      view !== 'dayGridMonth' && "min-h-[40px] flex items-center"
+                      view !== 'dayGridMonth' && "min-h-[40px] flex items-center",
+                      selectedProjectId === arg.event.id 
+                        ? "text-black dark:text-white font-bold text-[1.1em]" 
+                        : "text-white font-medium"
                     )}>
                       {arg.event.title}
                     </div>
@@ -360,8 +373,9 @@ function CalendarContent() {
                 {projects.map((project) => (
                   <div
                     key={project.id}
+                    onClick={() => setSelectedProjectId(project.id)}
                     className={cn(
-                      "flex items-center justify-between px-4 py-2 transition-colors hover:bg-slate-50",
+                      "flex items-center justify-between px-4 py-2 transition-colors hover:bg-slate-50 cursor-pointer",
                       selectedProjectId === project.id && "bg-slate-50"
                     )}
                   >
@@ -374,7 +388,8 @@ function CalendarContent() {
                       )} />
                       <span className={cn(
                         "font-medium truncate",
-                        project.status === 'done' && "line-through text-muted-foreground"
+                        project.status === 'done' && "line-through text-muted-foreground",
+                        selectedProjectId === project.id && "font-bold"
                       )}>
                         {project.title}
                       </span>
