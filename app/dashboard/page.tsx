@@ -47,6 +47,7 @@ type Task = {
   title: string
   status: "todo" | "in-progress" | "done"
   project_id: string
+  due_date: string | null
 }
 
 type Project = {
@@ -163,7 +164,23 @@ export default function DashboardPage() {
     today.setHours(0, 0, 0, 0)
 
     const activeProjects = projects.filter(p => p.status === "todo" || p.status === "in-progress").length
-    const tasksToday = "5" // This should be replaced with actual tasks count once we implement tasks
+
+    // Calculate tasks due today (only todo and in-progress tasks)
+    const tasksToday = projects.reduce((count, project) => {
+      if (!Array.isArray(project.tasks)) return count
+      
+      return count + project.tasks.filter(task => {
+        if (!task.due_date) return false
+        
+        const taskDate = new Date(task.due_date)
+        taskDate.setHours(0, 0, 0, 0)
+        
+        // Include tasks that are due today OR overdue
+        return taskDate.getTime() <= today.getTime() && 
+               (task.status === 'todo' || task.status === 'in-progress')
+      }).length
+    }, 0)
+
     const completedProjects = projects.filter(p => p.status === "done").length
 
     return [
@@ -175,7 +192,7 @@ export default function DashboardPage() {
       },
       {
         name: "Tasks Due Today",
-        value: tasksToday,
+        value: tasksToday.toString(),
         icon: <CalendarCheck className="h-4 w-4 text-muted-foreground" />,
         href: "/tasks?filter=due-today"
       },
@@ -255,7 +272,7 @@ export default function DashboardPage() {
         const projectsWithTasks = await Promise.all(projectsData.map(async (project) => {
           const { data: tasksData, error: tasksError } = await supabase
             .from('tasks')
-            .select('id, title, status, project_id')
+            .select('id, title, status, project_id, due_date')
             .eq('project_id', project.id)
 
           if (tasksError) {

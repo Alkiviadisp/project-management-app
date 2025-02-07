@@ -1,4 +1,4 @@
-import { LayoutDashboard, FolderKanban, ListTodo, Settings } from "lucide-react"
+import { LayoutDashboard, FolderKanban, ListTodo, Settings, Calendar } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -24,6 +24,11 @@ const pages = [
     title: "Tasks",
     url: "/tasks",
     icon: ListTodo,
+  },
+  {
+    title: "Calendar",
+    url: "/calendar",
+    icon: Calendar,
   },
   {
     title: "Settings",
