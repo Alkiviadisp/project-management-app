@@ -288,7 +288,7 @@ function CalendarContent() {
         "flex flex-col gap-1 p-1 transition-all duration-200 h-full w-full relative group",
         isTask ? "text-xs" : "text-sm font-medium"
       )}>
-        {visibleTasks.map((task: { id: string; title: string }) => (
+        {visibleTasks.map((task) => (
           <div 
             key={task.id}
             className={cn(
@@ -317,7 +317,7 @@ function CalendarContent() {
             </div>
             {/* Dropdown */}
             <div className="absolute left-0 top-full mt-1 w-full max-w-[250px] bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50 invisible group-hover:visible">
-              {remainingTasks.map((task: { id: string; title: string }) => (
+              {remainingTasks.map((task) => (
                 <div
                   key={task.id}
                   className="px-2 py-1 mx-2 my-1 rounded-full text-sm"
@@ -391,6 +391,21 @@ function CalendarContent() {
                   /* Calendar Styling */
                   .fc-view-harness {
                     background: white;
+                  }
+
+                  /* Increase spacing between days */
+                  .fc .fc-scrollgrid-section > td {
+                    border-width: 4px !important;
+                    border-color: white !important;
+                  }
+
+                  .fc-theme-standard td, .fc-theme-standard th {
+                    border-width: 4px !important;
+                    border-color: white !important;
+                  }
+
+                  .fc .fc-daygrid-day {
+                    padding: 2px !important;
                   }
 
                   /* Make header section sticky */

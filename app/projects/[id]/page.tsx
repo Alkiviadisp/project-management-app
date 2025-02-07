@@ -800,29 +800,7 @@ export default function ProjectDetailsPage() {
                                         today.setHours(0, 0, 0, 0)
                                         return date < today
                                       }}
-                                      className="rounded-md border p-3"
-                                      classNames={{
-                                        months: "space-y-4",
-                                        month: "space-y-4",
-                                        caption: "flex justify-center pt-1 relative items-center",
-                                        caption_label: "text-sm font-medium",
-                                        nav: "space-x-1 flex items-center",
-                                        nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
-                                        nav_button_previous: "absolute left-1",
-                                        nav_button_next: "absolute right-1",
-                                        table: "w-full border-collapse",
-                                        head_row: "flex",
-                                        head_cell: "w-9 font-medium text-slate-500 rounded-md",
-                                        row: "flex w-full mt-2",
-                                        cell: "w-9 h-9 text-center text-sm relative p-0 rounded-md hover:bg-slate-100 focus-within:relative focus-within:z-20",
-                                        day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100",
-                                        day_range_end: "day-range-end",
-                                        day_selected: "bg-blue-600 text-white hover:bg-blue-600 hover:text-white focus:bg-blue-600 focus:text-white",
-                                        day_today: "bg-slate-100",
-                                        day_outside: "opacity-50",
-                                        day_disabled: "opacity-50 cursor-not-allowed",
-                                        day_hidden: "invisible",
-                                      }}
+                                      className="rounded-md border"
                                     />
                                   </PopoverContent>
                                 </Popover>
@@ -866,7 +844,7 @@ export default function ProjectDetailsPage() {
                   </div>
                 )}
 
-                {sortedTasks.map((task: Task) => (
+                {sortedTasks.map((task) => (
                   <div
                     key={task.id}
                     className={cn(
