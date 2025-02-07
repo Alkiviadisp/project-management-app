@@ -19,6 +19,7 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import { EventContentArg } from '@fullcalendar/core'
+import { Badge } from "@/components/ui/badge"
 
 type Project = {
   id: string
@@ -31,17 +32,54 @@ type Project = {
   updated_at: string
 }
 
-type CalendarView = 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'
+type CalendarView = 'dayGridMonth' | 'dayGridWeek' | 'dayGridDay'
 
 function CalendarContent() {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [view, setView] = React.useState<CalendarView>('dayGridMonth')
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(null)
+  const [isViewTransitioning, setIsViewTransitioning] = React.useState(false)
   const sidebar = useSidebar()
   const supabase = createClient()
   const calendarRef = React.useRef<any>(null)
   const resizeTimeoutRef = React.useRef<NodeJS.Timeout>()
   const [isTransitioning, setIsTransitioning] = React.useState(false)
+
+  // Handle view changes with animation
+  const handleViewChange = (newView: CalendarView) => {
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi()
+      const calendarEl = calendarRef.current.elRef.current
+      
+      // Determine animation direction
+      const viewOrder = { dayGridMonth: 0, dayGridWeek: 1, dayGridDay: 2 }
+      const isZoomingIn = viewOrder[newView] > viewOrder[view]
+      
+      // Initial animation state
+      calendarEl.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
+      calendarEl.style.transformOrigin = 'center center'
+      
+      // Exit animation
+      if (isZoomingIn) {
+        calendarEl.style.transform = 'scale(0.95) translateY(10px)'
+      } else {
+        calendarEl.style.transform = 'scale(1.05) translateY(-10px)'
+      }
+      calendarEl.style.opacity = '0'
+      
+      // Change view after a short delay
+      setTimeout(() => {
+        calendarApi.changeView(newView)
+        setView(newView)
+        
+        // Enter animation
+        requestAnimationFrame(() => {
+          calendarEl.style.transform = 'scale(1) translateY(0)'
+          calendarEl.style.opacity = '1'
+        })
+      }, 200)
+    }
+  }
 
   React.useEffect(() => {
     fetchProjects()
@@ -149,21 +187,21 @@ function CalendarContent() {
           <div className="flex items-center gap-2">
             <Button
               variant={view === 'dayGridMonth' ? 'default' : 'outline'}
-              onClick={() => setView('dayGridMonth')}
+              onClick={() => handleViewChange('dayGridMonth')}
               className="h-8"
             >
               Month
             </Button>
             <Button
-              variant={view === 'timeGridWeek' ? 'default' : 'outline'}
-              onClick={() => setView('timeGridWeek')}
+              variant={view === 'dayGridWeek' ? 'default' : 'outline'}
+              onClick={() => handleViewChange('dayGridWeek')}
               className="h-8"
             >
               Week
             </Button>
             <Button
-              variant={view === 'timeGridDay' ? 'default' : 'outline'}
-              onClick={() => setView('timeGridDay')}
+              variant={view === 'dayGridDay' ? 'default' : 'outline'}
+              onClick={() => handleViewChange('dayGridDay')}
               className="h-8"
             >
               Day
@@ -178,12 +216,99 @@ function CalendarContent() {
           )}>
             <div className={cn(
               "rounded-xl border bg-white p-6 shadow-sm transition-all duration-500 ease-in-out transform",
-              isTransitioning && "scale-[0.999]" // Subtle scale effect during transition
+              isTransitioning && "scale-[0.999]"
             )}>
-              <div className="transition-all duration-500 ease-in-out">
+              <div className={cn(
+                "transition-all duration-300 ease-in-out",
+                isViewTransitioning && "opacity-0 scale-98"
+              )}>
+                <style jsx global>{`
+                  /* Enhanced transitions for view changes */
+                  .fc-view-harness {
+                    transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                  }
+
+                  .fc-view-harness-active > div {
+                    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                  }
+
+                  /* Prevent flickering during transitions */
+                  .fc .fc-view-harness {
+                    transform-style: preserve-3d;
+                    perspective: 1000px;
+                    backface-visibility: hidden;
+                  }
+
+                  .fc-view-harness-active > div > * {
+                    backface-visibility: hidden;
+                    transform: translateZ(0);
+                  }
+
+                  /* Smooth height transitions */
+                  .fc-view-harness {
+                    transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                  }
+
+                  /* Make day/week view cells much larger */
+                  .fc-dayGridWeek-view .fc-daygrid-day,
+                  .fc-dayGridDay-view .fc-daygrid-day {
+                    min-height: 400px !important;
+                  }
+
+                  /* Month view more compact */
+                  .fc-dayGridMonth-view .fc-daygrid-day {
+                    min-height: 80px !important;
+                    max-height: 80px !important;
+                  }
+
+                  .fc-dayGridMonth-view .fc-daygrid-day-frame {
+                    min-height: unset !important;
+                    padding: 2px !important;
+                  }
+
+                  .fc-dayGridMonth-view .fc-daygrid-day-events {
+                    min-height: unset !important;
+                    padding: 0 2px !important;
+                  }
+
+                  .fc-dayGridMonth-view .fc-daygrid-day-top {
+                    padding: 2px !important;
+                  }
+
+                  /* Improve cell content layout for week/day */
+                  .fc-dayGridWeek-view .fc-daygrid-day-frame,
+                  .fc-dayGridDay-view .fc-daygrid-day-frame {
+                    min-height: 100% !important;
+                    padding: 12px !important;
+                  }
+
+                  .fc-dayGridWeek-view .fc-daygrid-day-events,
+                  .fc-dayGridDay-view .fc-daygrid-day-events {
+                    min-height: 85% !important;
+                    padding: 12px !important;
+                  }
+
+                  /* Month view specific event styling */
+                  .fc-dayGridMonth-view .fc-daygrid-event {
+                    margin: 1px 0 !important;
+                    padding: 1px 4px !important;
+                    min-height: 18px !important;
+                    font-size: 0.75rem !important;
+                  }
+
+                  /* Week/Day view specific event styling */
+                  .fc-dayGridWeek-view .fc-daygrid-event,
+                  .fc-dayGridDay-view .fc-daygrid-event {
+                    margin: 6px 0 !important;
+                    padding: 8px 12px !important;
+                    min-height: 50px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                  }
+                `}</style>
                 <FullCalendar
                   ref={calendarRef}
-                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                  plugins={[dayGridPlugin, interactionPlugin]}
                   initialView={view}
                   events={calendarEvents}
                   headerToolbar={false}
@@ -191,11 +316,26 @@ function CalendarContent() {
                   eventClick={handleEventClick}
                   firstDay={1}
                   expandRows={true}
-                  dayMaxEvents={3}
+                  dayMaxEvents={view === 'dayGridMonth' ? 3 : 12}
+                  views={{
+                    dayGridMonth: {
+                      dayMaxEvents: 3,
+                    },
+                    dayGridWeek: {
+                      dayHeaderFormat: { weekday: 'short', day: 'numeric' },
+                      dayMaxEvents: 12,
+                      eventMinHeight: 50,
+                    },
+                    dayGridDay: {
+                      dayMaxEvents: 15,
+                      eventMinHeight: 50,
+                    }
+                  }}
                   eventContent={(arg: EventContentArg) => (
                     <div className={cn(
-                      "p-1 text-xs font-medium text-white rounded cursor-pointer transition-all duration-200 hover:opacity-90 hover:scale-[1.02]",
-                      arg.event.extendedProps.status === 'done' && "line-through opacity-70"
+                      "p-2 text-sm font-medium text-white rounded cursor-pointer transition-all duration-200 hover:opacity-90 hover:scale-[1.02]",
+                      arg.event.extendedProps.status === 'done' && "line-through opacity-70",
+                      view !== 'dayGridMonth' && "min-h-[40px] flex items-center"
                     )}>
                       {arg.event.title}
                     </div>
@@ -207,47 +347,53 @@ function CalendarContent() {
             {/* Project List */}
             <div className={cn(
               "rounded-xl border bg-white shadow-sm transition-all duration-500 ease-in-out",
-              isTransitioning && "scale-[0.999]" // Subtle scale effect during transition
+              isTransitioning && "scale-[0.999]"
             )}>
-              <div className="flex items-center gap-2 border-b p-4">
-                <List className="h-5 w-5" />
-                <h2 className="text-lg font-semibold">Projects</h2>
+              <div className="flex items-center justify-between border-b p-4">
+                <div className="flex items-center gap-2">
+                  <List className="h-5 w-5" />
+                  <h2 className="text-lg font-semibold">Projects</h2>
+                </div>
+                <span className="text-sm text-muted-foreground">{projects.length} projects</span>
               </div>
               <div className="divide-y">
                 {projects.map((project) => (
                   <div
                     key={project.id}
                     className={cn(
-                      "group flex items-center justify-between p-4 transition-colors hover:bg-slate-50",
+                      "flex items-center justify-between px-4 py-2 transition-colors hover:bg-slate-50",
                       selectedProjectId === project.id && "bg-slate-50"
                     )}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className={cn(
-                          "font-medium",
-                          project.status === 'done' && "line-through text-muted-foreground"
-                        )}>
-                          {project.title}
-                        </h3>
-                        <div className={cn(
-                          "h-2 w-2 rounded-full",
-                          project.status === 'todo' && "bg-slate-400",
-                          project.status === 'in-progress' && "bg-blue-400",
-                          project.status === 'done' && "bg-green-400"
-                        )} />
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span className={cn(
-                          "capitalize",
-                          project.priority === 'low' && "text-green-600",
-                          project.priority === 'medium' && "text-yellow-600",
-                          project.priority === 'high' && "text-red-600"
-                        )}>
-                          {project.priority} Priority
-                        </span>
-                        <span>Due {format(new Date(project.due_date), 'MMM d, yyyy')}</span>
-                      </div>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={cn(
+                        "h-2 w-2 flex-shrink-0 rounded-full",
+                        project.status === 'todo' && "bg-slate-400",
+                        project.status === 'in-progress' && "bg-blue-400",
+                        project.status === 'done' && "bg-green-400"
+                      )} />
+                      <span className={cn(
+                        "font-medium truncate",
+                        project.status === 'done' && "line-through text-muted-foreground"
+                      )}>
+                        {project.title}
+                      </span>
+                      <Badge variant="secondary" className={cn(
+                        "px-2 py-0.5 text-xs",
+                        project.priority === 'low' && "bg-green-100 text-green-700",
+                        project.priority === 'medium' && "bg-yellow-100 text-yellow-700",
+                        project.priority === 'high' && "bg-red-100 text-red-700"
+                      )}>
+                        {project.priority}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0 text-sm text-muted-foreground">
+                      <span className={cn(
+                        "text-xs",
+                        new Date() > new Date(project.due_date) && project.status !== 'done' && "text-red-600 font-medium"
+                      )}>
+                        Due {format(new Date(project.due_date), 'MMM d')}
+                      </span>
                     </div>
                   </div>
                 ))}
