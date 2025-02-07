@@ -393,21 +393,6 @@ function CalendarContent() {
                     background: white;
                   }
 
-                  /* Increase spacing between days */
-                  .fc .fc-scrollgrid-section > td {
-                    border-width: 4px !important;
-                    border-color: white !important;
-                  }
-
-                  .fc-theme-standard td, .fc-theme-standard th {
-                    border-width: 4px !important;
-                    border-color: white !important;
-                  }
-
-                  .fc .fc-daygrid-day {
-                    padding: 2px !important;
-                  }
-
                   /* Make header section sticky */
                   .fc .fc-scrollgrid-section-header {
                     position: sticky;
@@ -439,10 +424,6 @@ function CalendarContent() {
                     max-width: 100% !important;
                     overflow: visible !important;
                     z-index: 1;
-                  }
-
-                  .task-event:hover {
-                    z-index: 10;
                   }
 
                   .fc-event {

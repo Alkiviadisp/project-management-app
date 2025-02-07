@@ -800,7 +800,7 @@ export default function ProjectDetailsPage() {
                                         today.setHours(0, 0, 0, 0)
                                         return date < today
                                       }}
-                                      className="rounded-md border"
+                                      className="rounded-md border [&_.rdp]:p-2 [&_.rdp-months]:space-y-4 [&_.rdp-table]:w-full [&_.rdp-head_th]:w-10 [&_.rdp-head_th]:p-0 [&_.rdp-head_th]:font-normal [&_.rdp-head_th]:text-sm [&_.rdp-cell]:p-0 [&_.rdp-tbody]:space-y-2 [&_.rdp-day]:h-10 [&_.rdp-day]:w-10 [&_.rdp-day]:p-0 [&_.rdp-day_button]:h-10 [&_.rdp-day_button]:w-10"
                                     />
                                   </PopoverContent>
                                 </Popover>
