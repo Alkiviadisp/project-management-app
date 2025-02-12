@@ -1,170 +1,184 @@
 # Project Management App
 
-A modern project and task management application built with Next.js, Supabase, and TailwindCSS.
+A modern, full-stack project management application built with Next.js 14, Supabase, and TailwindCSS. This application provides a comprehensive solution for managing projects, tasks, and team collaboration with a beautiful, responsive interface.
 
-## Overview
+## 🌟 Features
 
-Project Management App is designed to help you create, manage, and track projects and tasks efficiently. This full-featured application leverages the power of Next.js for server-side rendering, Supabase for backend services (PostgreSQL database, authentication, and file storage), and TailwindCSS combined with Shadcn UI for a modern, responsive design.
-
-## Features
+### Authentication & User Management
+- Secure authentication with Supabase Auth
+- User profiles with avatars and customizable settings
+- Role-based access control
 
 ### Projects
-- Create and manage projects with titles, descriptions, and due dates
-- Assign priority levels (low, medium, high) and statuses (todo, in-progress, done)
-- Add tags for better organization
-- Upload and manage project attachments and cover images
-- Edit project details with inline editing and dropdown file selection
-- Color-coded project cards for quick visual identification
+- Create and manage projects with rich details
+- Set priorities (low, medium, high)
+- Track project status (todo, in-progress, done)
+- Add custom tags and color coding
+- Upload project attachments and cover images
+- Collaborative project spaces
 
 ### Tasks
-- Create, edit, and delete tasks within projects
-- Set due dates and provide descriptions for tasks
-- Track task status with visual indicators
-- Sort tasks by due date and group them in a Kanban-style layout
-- Quick actions on hover including edit, delete, and status toggling
+- Comprehensive task management within projects
+- Task assignments and due dates
+- Status tracking with Kanban-style board
+- Task comments and discussions
+- Drag-and-drop task organization
+- Due date reminders
 
-### Dashboard & UI
-- Overview of project and task statistics with interactive UI components
-- Visual representation of task distribution with smooth transitions and hover effects
-- Responsive design optimized for both desktop and mobile devices
+### Calendar & Planning
+- Interactive calendar view (FullCalendar integration)
+- Resource timeline
+- Event scheduling and management
+- Multiple calendar views (day, week, month)
 
-## Tech Stack
+### Dashboard
+- Real-time project statistics
+- Task distribution charts
+- Progress tracking
+- Team activity overview
 
-- **Frontend**: Next.js 14 (App Router), React, TailwindCSS, Shadcn UI
-- **Backend**: Supabase (PostgreSQL, Storage, and Auth)
-- **Forms & Validation**: React Hook Form, Zod
-- **Date Handling**: date-fns
-- **Icons**: Lucide Icons
-- **State Management**: React Hooks, Context API
+## 🛠 Tech Stack
 
-## Getting Started
+### Frontend
+- **Framework**: Next.js 14 (App Router)
+- **UI Components**: 
+  - TailwindCSS for styling
+  - Shadcn UI components
+  - Radix UI primitives
+- **State Management**: React Hooks & Context API
+- **Forms**: React Hook Form with Zod validation
+- **Data Visualization**: Recharts
+- **Calendar**: FullCalendar
+- **Drag & Drop**: DND Kit
+- **Notifications**: Sonner, React Hot Toast
+
+### Backend & Database
+- **Backend**: Supabase
+  - PostgreSQL database
+  - Row Level Security (RLS)
+  - Real-time subscriptions
+  - Storage for files and avatars
+- **Authentication**: Supabase Auth
+- **API**: Next.js API routes with Supabase client
+
+## 🚀 Getting Started
 
 ### Prerequisites
-
-- [Node.js](https://nodejs.org/en/) (v14 or later)
-- [npm](https://www.npmjs.com/)
+- Node.js 20.x or later
+- npm or yarn
+- Supabase account
 
 ### Installation
 
-1. **Clone the Repository**
-
+1. Clone the repository
    ```bash
    git clone https://github.com/yourusername/project-management-app.git
    cd project-management-app
    ```
 
-2. **Install Dependencies**
-
+2. Install dependencies
    ```bash
    npm install
    ```
 
-3. **Setup Environment Variables**
-
-   Create a `.env.local` file in the project root and add the following:
-
+3. Set up environment variables
+   Create a `.env.local` file with:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
 
-4. **Run the Development Server**
+4. Initialize Supabase
+   - Create a new Supabase project
+   - Run the SQL schema from `schema.sql`
+   - Set up storage buckets for avatars and project attachments
 
+5. Start the development server
    ```bash
    npm run dev
    ```
 
-   Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
+### Docker Deployment
 
-## Environment Variables
+1. Build the Docker image
+   ```bash
+   docker build -t project-management-app .
+   ```
 
-Ensure you have the following environment variables configured in your `.env.local` file:
+2. Run with Docker Compose
+   ```bash
+   docker-compose up -d
+   ```
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+## 📦 Project Structure
+
+```
+project-management-app/
+├── app/                    # Next.js 14 app directory
+│   ├── api/               # API routes
+│   ├── auth/              # Authentication pages
+│   ├── dashboard/         # Dashboard views
+│   ├── projects/          # Project management
+│   ├── tasks/             # Task management
+│   └── calendar/          # Calendar views
+├── components/            # Reusable React components
+│   ├── ui/               # UI components
+│   ├── forms/            # Form components
+│   └── charts/           # Data visualization
+├── lib/                   # Utility functions
+├── hooks/                # Custom React hooks
+├── public/               # Static assets
+└── supabase/             # Supabase configuration
 ```
 
-## Database Schema
+## 🗄️ Database Schema
 
-All database schema changes are managed in a single file: **schema.sql**. The previous add_due_date.sql file is no longer used.
+The application uses a PostgreSQL database with the following main tables:
 
-### Projects Table
+- `profiles`: User profiles and settings
+- `projects`: Project details and metadata
+- `tasks`: Task information and assignments
+- `project_members`: Project membership and permissions
+- `comments`: Task comments and discussions
 
-```sql
-projects (
-  id uuid primary key,
-  title text not null,
-  description text,
-  status text not null,
-  due_date timestamp with time zone,
-  priority text not null,
-  tags text[],
-  attachments jsonb default '[]'::jsonb,
-  color text,
-  created_by uuid references auth.users,
-  created_at timestamp with time zone default now()
-)
-```
+Detailed schema available in `schema.sql`
 
-### Tasks Table
+## 🔒 Security
 
-```sql
-tasks (
-  id uuid primary key,
-  title text not null,
-  description text,
-  status text not null,
-  due_date timestamp with time zone,
-  project_id uuid references projects,
-  created_by uuid references auth.users,
-  created_at timestamp with time zone default now(),
-  updated_at timestamp with time zone default now()
-)
-```
+- Row Level Security (RLS) policies for data protection
+- Secure file uploads with mime-type validation
+- Protected API routes
+- Authenticated Supabase client
+- Environment variable protection
 
-## Application Structure
+## 🚀 Deployment
 
-The codebase is structured as follows:
+### Vercel Deployment
+1. Push your code to GitHub
+2. Import project to Vercel
+3. Configure environment variables
+4. Deploy
 
-- **app/**: Contains Next.js pages using the new App Router, including project listing, project details, and task management pages.
-- **components/**: Reusable UI components such as buttons, forms, modals, sidebars, and file inputs.
-- **lib/**: Utility functions and Supabase client setup.
-- **public/**: Static assets and images.
-- **schema.sql**: The consolidated file that defines the entire database schema and related triggers, functions, and policies.
+### Docker Deployment
+The application includes Docker configuration for containerized deployment:
+- Multi-stage build process
+- Node.js 20 base image
+- Production-optimized configuration
 
-## Deployment
+## 📝 License
 
-The easiest way to deploy this application is using the [Vercel Platform](https://vercel.com/new). Vercel seamlessly integrates with Next.js and offers top performance.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-For manual deployment, follow these steps:
+## 🤝 Contributing
 
-1. Push your changes to your GitHub repository.
-2. Connect your repository on Vercel.
-3. Ensure your environment variables are set in Vercel's dashboard.
-4. Deploy your application.
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-For more details, refer to the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying).
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## Contributing
+## 📫 Support
 
-Contributions are welcome! To contribute:
-
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Commit your changes using clear, descriptive commit messages.
-4. Push to your fork and submit a pull request.
-
-Please ensure that your work follows our coding guidelines, including using TailwindCSS for styling and maintaining consistent code style.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Contact
-
-For questions, suggestions, or feedback, feel free to open an issue or contact us at [your.email@example.com](mailto:your.email@example.com).
-
----
-
-Happy project managing!
+For support, email your-email@example.com or open an issue in the repository.
