@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -74,7 +75,7 @@ const DynamicPieChart = dynamic(() => import('@/components/charts/task-distribut
   )
 })
 
-export default function ProjectsPage() {
+function ProjectList() {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [tasks, setTasks] = React.useState<Task[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
@@ -701,5 +702,15 @@ export default function ProjectsPage() {
         </main>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">
+      <div className="h-8 w-8 rounded-full border-2 border-t-blue-500 animate-spin" />
+    </div>}>
+      <ProjectList />
+    </Suspense>
   )
 } 

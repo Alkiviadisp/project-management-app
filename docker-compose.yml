@@ -1,0 +1,10 @@
+services:
+  app:
+    image: alkiviadisp/project-managment:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    restart: always

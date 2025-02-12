@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Suspense } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -86,7 +87,7 @@ type StoredFile = {
   path: string;
 }
 
-export default function NewProjectPage() {
+function ProjectForm() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [files, setFiles] = React.useState<File[]>([])
   const [coverImage, setCoverImage] = React.useState<File | StoredFile | null>(null)
@@ -960,5 +961,13 @@ export default function NewProjectPage() {
         </main>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+export default function NewProjectPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ProjectForm />
+    </Suspense>
   )
 } 

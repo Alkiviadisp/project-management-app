@@ -84,6 +84,7 @@ import {
   useDraggable,
 } from "@dnd-kit/core"
 import { restrictToWindowEdges } from "@dnd-kit/modifiers"
+import { Suspense } from "react"
 
 type ProjectStatus = 'todo' | 'in-progress' | 'done'
 
@@ -140,7 +141,7 @@ const taskFormSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskFormSchema>
 
-export default function TasksPage() {
+function TaskList() {
   const [tasks, setTasks] = React.useState<Task[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -1172,5 +1173,15 @@ function DroppableColumn({ id, title, children, className }: {
         {children}
       </div>
     </div>
+  )
+}
+
+export default function TasksPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">
+      <div className="h-8 w-8 rounded-full border-2 border-t-blue-500 animate-spin" />
+    </div>}>
+      <TaskList />
+    </Suspense>
   )
 } 
