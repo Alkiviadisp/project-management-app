@@ -29,7 +29,8 @@ import {
   Download,
   FileText,
   Table,
-  File
+  File,
+  RotateCcw
 } from "lucide-react"
 import { ChevronDown } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -128,6 +129,7 @@ export default function ProjectDetailsPage() {
   const [isCreatingTask, setIsCreatingTask] = React.useState(false)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingTask, setEditingTask] = React.useState<Task | null>(null)
+  const [isCompletedTasksOpen, setIsCompletedTasksOpen] = React.useState(false)
   const supabase = createClient()
   const router = useRouter()
   const form = useForm<TaskFormValues>({
@@ -439,6 +441,15 @@ export default function ProjectDetailsPage() {
     })
   }, [tasks])
 
+  // Sort tasks to separate completed ones
+  const activeTasks = React.useMemo(() => {
+    return sortedTasks.filter(task => task.status !== 'done')
+  }, [sortedTasks])
+
+  const completedTasks = React.useMemo(() => {
+    return sortedTasks.filter(task => task.status === 'done')
+  }, [sortedTasks])
+
   if (isLoading || !project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -690,6 +701,135 @@ export default function ProjectDetailsPage() {
               </div>
             </div>
 
+            {/* Completed Tasks Section */}
+            <div className="rounded-lg border bg-white shadow-sm">
+              <Collapsible open={isCompletedTasksOpen} onOpenChange={setIsCompletedTasksOpen}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-red-600" />
+                    <span>Completed Tasks</span>
+                    <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
+                      {completedTasks.length}
+                    </Badge>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="divide-y border-t">
+                    {completedTasks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
+                        <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                        <p>No completed tasks yet</p>
+                        <p className="text-xs mt-1">Tasks marked as done will appear here</p>
+                      </div>
+                    ) : (
+                      completedTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="group relative overflow-visible bg-red-50/50 px-5 py-4"
+                        >
+                          <div className="relative flex items-start gap-4">
+                            <button
+                              onClick={() => toggleTaskStatus(task.id, task.status)}
+                              className="mt-1 flex-shrink-0 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 rounded-full"
+                              aria-label="Mark task as incomplete"
+                            >
+                              <CheckCircle2 className="h-5 w-5 text-red-600" />
+                            </button>
+                            <div className="flex-grow min-w-0">
+                              <h3 className="text-base font-medium text-slate-500 line-through truncate">
+                                {task.title}
+                              </h3>
+                              {task.description && (
+                                <p className="mt-1 text-sm text-slate-400 line-through line-clamp-2">
+                                  {task.description}
+                                </p>
+                              )}
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {task.due_date && (
+                                  <div className="flex items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm backdrop-blur-sm ring-1 ring-slate-200/50">
+                                    <CalendarDays className="h-3.5 w-3.5" />
+                                    Due {format(new Date(task.due_date), 'MMM d, yyyy')}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm backdrop-blur-sm ring-1 ring-slate-200/50">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  {format(new Date(task.created_at), 'MMM d, yyyy')}
+                                </div>
+                                <Badge variant="secondary" className="bg-red-100 text-red-600 ring-1 ring-red-200/50">
+                                  Completed
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="absolute right-0 top-0 flex items-center gap-2 invisible group-hover:visible">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const { data: { user } } = await supabase.auth.getUser()
+                                    if (!user) throw new Error("User not found")
+
+                                    const { error: updateError } = await supabase
+                                      .rpc('update_task_status', {
+                                        p_task_id: task.id,
+                                        p_user_id: user.id,
+                                        p_status: 'todo'
+                                      })
+
+                                    if (updateError) throw updateError
+
+                                    setTasks(prev => prev.map(t => 
+                                      t.id === task.id ? { ...t, status: 'todo' } : t
+                                    ))
+
+                                    toast.success("Task moved back to todo")
+                                  } catch (error) {
+                                    console.error('Error updating task:', error)
+                                    toast.error("Failed to update task status")
+                                  }
+                                }}
+                                className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-green-50 hover:shadow-md cursor-pointer"
+                                title="Return to Todo"
+                              >
+                                <RotateCcw className="h-4 w-4 text-green-600" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingTask(task);
+                                  setIsDialogOpen(true);
+                                }}
+                                className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-red-50 hover:shadow-md cursor-pointer"
+                              >
+                                <Pencil className="h-4 w-4 text-red-600" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm('Are you sure you want to delete this task?')) {
+                                    deleteTask(task.id);
+                                  }
+                                }}
+                                className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-red-50 hover:shadow-md cursor-pointer"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+
             {/* Tasks Section */}
             <div className="space-y-6 rounded-2xl border bg-white p-6 shadow-sm lg:p-8">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -832,7 +972,7 @@ export default function ProjectDetailsPage() {
               </div>
 
               <div className="space-y-4">
-                {sortedTasks.length === 0 && (
+                {activeTasks.length === 0 && completedTasks.length === 0 && (
                   <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-white/50 py-12 text-center">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100/50 text-blue-600">
                       <CheckCircle2 className="h-6 w-6" />
@@ -844,7 +984,7 @@ export default function ProjectDetailsPage() {
                   </div>
                 )}
 
-                {sortedTasks.map((task) => (
+                {activeTasks.map((task) => (
                   <div
                     key={task.id}
                     className={cn(
