@@ -1,4 +1,4 @@
-import { LayoutDashboard, FolderKanban, ListTodo, Settings, Calendar } from "lucide-react"
+import { LayoutDashboard, FolderKanban, ListTodo, Calendar, Plus } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -8,6 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Separator } from "@/components/ui/separator"
 
 const pages = [
   {
@@ -29,11 +30,6 @@ const pages = [
     title: "Calendar",
     url: "/calendar",
     icon: Calendar,
-  },
-  {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
   },
 ]
 
@@ -75,6 +71,33 @@ export function NavPages() {
             )
           })}
         </nav>
+        <div className="mt-3">
+          <hr className="border-t border-[hsl(240,5%,26%)]" />
+        </div>
+        <div className="mt-3">
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Link
+                href="/projects/new"
+                className={cn(
+                  "flex h-9 w-full items-center rounded-lg px-2",
+                  "hover:bg-accent text-muted-foreground hover:text-foreground",
+                  "data-[state=collapsed]:justify-center data-[state=collapsed]:w-9",
+                  "data-[state=expanded]:w-full data-[state=expanded]:justify-start",
+                )}
+                data-state={sidebar.state}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className={cn("ml-2", sidebar.state === "collapsed" ? "hidden" : "block")}>
+                  Create New Project
+                </span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="hidden data-[state=collapsed]:block">
+              Create New Project
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </div>
   )
