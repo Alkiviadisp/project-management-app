@@ -133,14 +133,14 @@ export default function AccountPage() {
         // Delete old avatar if it exists
         if (user?.avatar_url) {
           try {
-            // Extract just the filename from the URL
-            const filename = user.avatar_url.split('/').pop()?.split('?')[0]
-            if (filename) {
-              console.log('Attempting to delete:', filename)
+            // Extract the full path from the URL (should be userId/filename)
+            const urlParts = user.avatar_url.split('/avatars/')[1]?.split('?')[0]
+            if (urlParts) {
+              console.log('Attempting to delete:', urlParts)
               
               const { error: deleteError } = await supabase.storage
                 .from('avatars')
-                .remove([filename])
+                .remove([urlParts])
 
               if (deleteError) {
                 console.error('Failed to delete old avatar:', deleteError)
@@ -158,26 +158,19 @@ export default function AccountPage() {
         }
 
         // Upload new avatar
-        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+        const fileName = `${user.id}/${Math.random().toString(36).substring(2)}.${fileExt}`
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(fileName, avatarFile, {
             cacheControl: '3600',
-            upsert: false
+            upsert: true
           })
 
         if (uploadError) {
-          if (uploadError.message.includes('duplicate')) {
-            toast.error("Upload Failed", {
-              description: "A file with this name already exists. Please try again.",
-              duration: 5000,
-            })
-          } else {
-            toast.error("Upload Failed", {
-              description: "Failed to upload avatar. Please try again.",
-              duration: 5000,
-            })
-          }
+          toast.error("Upload Failed", {
+            description: "Failed to upload avatar. Please try again.",
+            duration: 5000,
+          })
           throw uploadError
         }
 
@@ -195,12 +188,18 @@ export default function AccountPage() {
       // Update profile if nickname changed
       if (values.nickname !== user?.nickname) {
         hasChanges = true
+        const updateData: { nickname: string; avatar_url?: string } = {
+          nickname: values.nickname,
+        }
+        
+        // Only include avatar_url if it changed
+        if (avatarUrl !== user?.avatar_url) {
+          updateData.avatar_url = avatarUrl
+        }
+
         const { error: updateError } = await supabase
           .from('profiles')
-          .update({
-            nickname: values.nickname,
-            avatar_url: avatarUrl,
-          })
+          .update(updateData)
           .eq('id', user?.id)
 
         if (updateError) throw updateError

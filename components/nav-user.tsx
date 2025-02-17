@@ -6,6 +6,7 @@ import {
   ChevronsUpDown,
   LogOut,
   Sparkles,
+  User,
 } from "lucide-react"
 
 import {
@@ -123,6 +124,12 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/account">
+                <User className="mr-2" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2" />
               Log out

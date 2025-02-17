@@ -122,22 +122,32 @@ BEGIN
     ON storage.objects FOR SELECT
     USING (bucket_id = 'avatars');
 
-    -- 2. Allow anyone to upload avatars during sign-up
-    CREATE POLICY "Allow avatar uploads"
+    -- 2. Allow authenticated users to upload avatars
+    CREATE POLICY "Allow authenticated users to upload avatars"
     ON storage.objects FOR INSERT
-    WITH CHECK (bucket_id = 'avatars');
+    TO authenticated
+    WITH CHECK (
+        bucket_id = 'avatars' AND
+        (storage.foldername(name))[1] = auth.uid()::text
+    );
 
     -- 3. Allow authenticated users to update their avatars
-    CREATE POLICY "Allow users to update avatars"
+    CREATE POLICY "Allow users to update own avatars"
     ON storage.objects FOR UPDATE
     TO authenticated
-    USING (bucket_id = 'avatars');
+    USING (
+        bucket_id = 'avatars' AND
+        (storage.foldername(name))[1] = auth.uid()::text
+    );
 
     -- 4. Allow authenticated users to delete their avatars
-    CREATE POLICY "Allow users to delete avatars"
+    CREATE POLICY "Allow users to delete own avatars"
     ON storage.objects FOR DELETE
     TO authenticated
-    USING (bucket_id = 'avatars');
+    USING (
+        bucket_id = 'avatars' AND
+        (storage.foldername(name))[1] = auth.uid()::text
+    );
 
 END $$;
 

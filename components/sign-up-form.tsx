@@ -151,7 +151,6 @@ export function SignUpForm() {
           duration: 8000, // Longer duration for important message
           important: true, // Makes the toast persist
         })
-        
         // Add a slight delay before redirect to ensure the user sees the message
         await new Promise(resolve => setTimeout(resolve, 1000))
         router.push("/login")
