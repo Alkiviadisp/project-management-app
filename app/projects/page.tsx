@@ -50,10 +50,6 @@ type Project = {
   }>
   color: string
   created_at: string
-  cover_image: {
-    url: string
-    name: string
-  } | null
 }
 
 type Task = {
@@ -589,34 +585,9 @@ function ProjectList() {
                           </Button>
                         </div>
 
-                        {project.cover_image && (
-                          <div className="absolute top-0 left-0 w-[100px] h-[100px] overflow-hidden bg-gradient-to-b from-black/5 to-black/20">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <img
-                                  src={project.cover_image.url}
-                                  alt={project.cover_image.name}
-                                  className="h-full w-full object-cover transition-transform duration-300 hover:scale-105 cursor-zoom-in"
-                                />
-                              </DialogTrigger>
-                              <DialogContent className="max-w-3xl">
-                                <DialogHeader>
-                                  <DialogTitle>{project.title}</DialogTitle>
-                                  <DialogDescription>Project Cover Image</DialogDescription>
-                                </DialogHeader>
-                                <img
-                                  src={project.cover_image.url}
-                                  alt={project.cover_image.name}
-                                  className="w-full rounded-lg"
-                                />
-                              </DialogContent>
-                            </Dialog>
-                          </div>
-                        )}
-
                         <div className="flex-1 p-4">
                           <div className="space-y-3">
-                            <div className={cn("space-y-1", project.cover_image && "pl-[108px]")}>
+                            <div className="space-y-1">
                               <h3 className="text-base font-semibold line-clamp-1 text-gray-900">
                                 {project.title}
                               </h3>
@@ -625,7 +596,7 @@ function ProjectList() {
                               </p>
                             </div>
 
-                            <div className={cn("flex flex-wrap gap-1.5", project.cover_image && "pl-[108px]")}>
+                            <div className="flex flex-wrap gap-1.5">
                               <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(project.status))}>
                                 {project.status.replace('-', ' ')}
                               </Badge>

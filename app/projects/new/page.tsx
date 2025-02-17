@@ -61,7 +61,6 @@ const projectFormSchema = z.object({
   }),
   priority: z.enum(["low", "medium", "high"]),
   tags: z.string().array(),
-  cover_image: z.any().optional(),
   attachments: z.any().array().optional(),
 })
 
@@ -74,7 +73,6 @@ const defaultValues: Partial<ProjectFormValues> = {
   status: "todo",
   priority: "medium",
   tags: [],
-  cover_image: undefined,
   attachments: [],
 }
 
@@ -90,7 +88,6 @@ type StoredFile = {
 function ProjectForm() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [files, setFiles] = React.useState<File[]>([])
-  const [coverImage, setCoverImage] = React.useState<File | StoredFile | null>(null)
   const [existingAttachments, setExistingAttachments] = React.useState<StoredFile[]>([])
   const [tagsInput, setTagsInput] = React.useState("")
   const router = useRouter()
@@ -159,11 +156,6 @@ function ProjectForm() {
         const ownerNickname = data.profiles?.nickname || data.owner || ''
         setUserNickname(ownerNickname)
 
-        // Set cover image if it exists
-        if (data.cover_image) {
-          setCoverImage(data.cover_image as StoredFile)
-        }
-
         form.reset({
           title: data.title,
           description: data.description,
@@ -172,7 +164,6 @@ function ProjectForm() {
           dueDate: new Date(data.due_date),
           priority: data.priority,
           tags: data.tags || [],
-          cover_image: data.cover_image,
           attachments: data.attachments || [],
         })
 
@@ -203,62 +194,6 @@ function ProjectForm() {
       if (userError) throw userError
       if (!user) throw new Error("User not found")
 
-      // Handle cover image upload first
-      let coverImageData = null
-      if (coverImage) {
-        try {
-          // Check if it's a new file upload or existing stored file
-          if (!isEditing || !('url' in coverImage)) {
-            // This is a new File upload
-            const file = coverImage as File
-            if (file.size > 10 * 1024 * 1024) {
-              throw new Error("Cover image is too large. Maximum size is 10MB")
-            }
-
-            if (!file.type.match(/^image\/(jpeg|png|gif|webp)$/)) {
-              throw new Error("Cover image is not a supported image type")
-            }
-
-            const timestamp = new Date().getTime()
-            const randomString = Math.random().toString(36).substring(2, 15)
-            const cleanFileName = file.name.toLowerCase().replace(/[^a-z0-9.-]/g, '-')
-            const fileName = `${timestamp}-${randomString}-${cleanFileName}`
-            const filePath = `covers/${user.id}/${fileName}`
-
-            const { error: uploadError, data: uploadData } = await supabase.storage
-              .from('project-attachments')
-              .upload(filePath, file, {
-                cacheControl: '3600',
-                contentType: file.type,
-                upsert: false
-              })
-
-            if (uploadError) throw uploadError
-
-            const { data: { publicUrl } } = supabase.storage
-              .from('project-attachments')
-              .getPublicUrl(filePath)
-
-            coverImageData = {
-              url: publicUrl,
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              path: filePath
-            }
-          } else {
-            // This is an existing stored file
-            coverImageData = coverImage as StoredFile
-          }
-        } catch (error) {
-          console.error('Cover image upload error:', error)
-          toast.error("Failed to upload cover image", {
-            description: error instanceof Error ? error.message : "Upload failed"
-          })
-          throw error
-        }
-      }
-
       // Handle regular attachments upload
       const uploadedFiles = []
       if (files.length > 0) {
@@ -274,7 +209,6 @@ function ProjectForm() {
             const fileName = `${timestamp}-${randomString}-${cleanFileName}`
             const filePath = `files/${user.id}/${fileName}`
 
-            // Force content type to application/octet-stream for better compatibility
             const { error: uploadError, data: uploadData } = await supabase.storage
               .from('project-attachments')
               .upload(filePath, file, {
@@ -330,7 +264,6 @@ function ProjectForm() {
         due_date: data.dueDate.toISOString(),
         priority: data.priority,
         tags: data.tags || [],
-        cover_image: coverImageData,
         attachments: finalAttachments,
         color: isEditing ? undefined : randomColor
       }
@@ -345,21 +278,19 @@ function ProjectForm() {
             )
         )
         
-        const { error: updateError, data: updateResult } = await supabase
+        const { error: updateError } = await supabase
           .from('projects')
           .update(updateData)
           .eq('id', editId)
         error = updateError
       } else {
-        const { error: insertError, data: insertResult } = await supabase
+        const { error: insertError } = await supabase
           .from('projects')
           .insert(projectData)
         error = insertError
       }
 
-      if (error) {
-        throw error
-      }
+      if (error) throw error
 
       toast.success(isEditing ? "Project Updated" : "Project Created", {
         description: isEditing 
@@ -376,11 +307,6 @@ function ProjectForm() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleCoverImageChange = (file: File | null) => {
-    setCoverImage(file)
-    form.setValue('cover_image', file)
   }
 
   return (
@@ -439,91 +365,6 @@ function ProjectForm() {
                         <h2 className="text-xl font-semibold">Project Information</h2>
                       </div>
                       <div className="ml-auto flex items-center gap-4">
-                        {/* Cover Image Dropdown */}
-                        <Collapsible>
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center gap-2 border-blue-200 hover:bg-blue-50"
-                            >
-                              <Upload className="h-4 w-4 text-blue-500" />
-                              <span className="text-sm text-blue-600">Cover Image</span>
-                              {coverImage && (
-                                <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-600">1</Badge>
-                              )}
-                              <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-200 ease-in-out group-data-[state=open]:rotate-180" />
-                            </Button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className="absolute mt-2 w-80 rounded-lg border bg-white p-2 shadow-lg">
-                            <FormField
-                              control={form.control}
-                              name="cover_image"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <div className="flex flex-col gap-2">
-                                      <label htmlFor="cover-image" className="group relative">
-                                        <Input
-                                          id="cover-image"
-                                          type="file"
-                                          accept="image/*"
-                                          className="hidden"
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0]
-                                            if (file && file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
-                                              handleCoverImageChange(file)
-                                            } else {
-                                              toast.error("Invalid file. Please select an image under 10MB.")
-                                            }
-                                            e.target.value = ''
-                                          }}
-                                        />
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          className="w-full justify-center gap-2"
-                                          onClick={() => document.getElementById('cover-image')?.click()}
-                                        >
-                                          <Upload className="h-4 w-4" />
-                                          Choose Image
-                                        </Button>
-                                      </label>
-                                      {coverImage && (
-                                        <div className="flex items-center gap-2 rounded-lg border bg-white p-2">
-                                          <img
-                                            src={'url' in coverImage ? coverImage.url : URL.createObjectURL(coverImage)}
-                                            alt="Cover preview"
-                                            className="h-10 w-10 rounded object-cover"
-                                          />
-                                          <span className="text-sm text-slate-600 max-w-[100px] truncate">
-                                            {coverImage.name}
-                                          </span>
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 text-red-600 hover:bg-red-50 ml-auto"
-                                            onClick={() => {
-                                              if (!('url' in coverImage)) {
-                                                URL.revokeObjectURL(URL.createObjectURL(coverImage))
-                                              }
-                                              handleCoverImageChange(null)
-                                            }}
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </CollapsibleContent>
-                        </Collapsible>
-
                         {/* Attachments Dropdown */}
                         <Collapsible>
                           <CollapsibleTrigger asChild>

@@ -33,7 +33,6 @@ create table if not exists projects (
     due_date timestamptz,
     priority text check (priority in ('low', 'medium', 'high')),
     tags text[] default array[]::text[],
-    cover_image jsonb default null,
     attachments jsonb default '[]'::jsonb,
     color text,
     created_at timestamptz default now(),
@@ -329,9 +328,18 @@ CREATE POLICY "Give public access to view files" ON storage.objects
 
 -- Add comments for documentation
 COMMENT ON TABLE public.projects IS 'Stores project information';
-COMMENT ON COLUMN public.projects.attachments IS 'Array of file attachments with structure: [{url: string, name: string, type: string, size: number, path: string}]';
-COMMENT ON COLUMN public.projects.cover_image IS 'Project cover image with structure: {url: string, name: string, type: string, size: number, path: string}';
-COMMENT ON COLUMN public.projects.color IS 'Tailwind CSS color class for the project card';
+COMMENT ON COLUMN public.projects.id IS 'Unique identifier for the project';
+COMMENT ON COLUMN public.projects.created_at IS 'Timestamp when the project was created';
+COMMENT ON COLUMN public.projects.title IS 'Project title';
+COMMENT ON COLUMN public.projects.description IS 'Project description';
+COMMENT ON COLUMN public.projects.status IS 'Project status (todo, in-progress, done)';
+COMMENT ON COLUMN public.projects.due_date IS 'Project due date';
+COMMENT ON COLUMN public.projects.priority IS 'Project priority (low, medium, high)';
+COMMENT ON COLUMN public.projects.tags IS 'Array of project tags';
+COMMENT ON COLUMN public.projects.attachments IS 'Array of project attachments with structure: {url: string, name: string, type: string, size: number, path: string}';
+COMMENT ON COLUMN public.projects.color IS 'Project card color';
+COMMENT ON COLUMN public.projects.created_by IS 'User ID who created the project';
+COMMENT ON COLUMN public.projects.owner IS 'Project owner name';
 
 -- Refresh schema cache
 NOTIFY pgrst, 'reload schema';
