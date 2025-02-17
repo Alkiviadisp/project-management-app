@@ -407,9 +407,9 @@ function TaskList() {
       const updatedTask = {
         title: values.title,
         description: values.description || null,
-        due_date: values.due_date?.toISOString() || null,
+        due_date: values.due_date ? values.due_date.toISOString().split('T')[0] : null,
         status: values.status,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString().split('T')[0]
       }
 
       // Update task using raw SQL to ensure proper enum handling
@@ -428,8 +428,8 @@ function TaskList() {
         .update({
           title: values.title,
           description: values.description || null,
-          due_date: values.due_date?.toISOString() || null,
-          updated_at: new Date().toISOString()
+          due_date: values.due_date ? values.due_date.toISOString().split('T')[0] : null,
+          updated_at: new Date().toISOString().split('T')[0]
         })
         .eq('id', editingTask.id)
         .eq('created_by', user.id)

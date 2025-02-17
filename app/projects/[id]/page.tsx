@@ -227,12 +227,17 @@ export default function ProjectDetailsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("User not found")
 
+      // Format the date without timezone conversion
+      const formattedDate = values.due_date ? 
+        `${values.due_date.getFullYear()}-${String(values.due_date.getMonth() + 1).padStart(2, '0')}-${String(values.due_date.getDate()).padStart(2, '0')}` : 
+        null;
+
       const { data, error } = await supabase
         .from('tasks')
         .insert({
           title: values.title,
           description: values.description,
-          due_date: values.due_date?.toISOString() || null,
+          due_date: formattedDate,
           status: values.status,
           project_id: projectId,
           created_by: user.id
@@ -278,8 +283,8 @@ export default function ProjectDetailsPage() {
         .update({
           title: values.title,
           description: values.description || null,
-          due_date: values.due_date?.toISOString() || null,
-          updated_at: new Date().toISOString()
+          due_date: values.due_date ? values.due_date.toISOString().split('T')[0] : null,
+          updated_at: new Date().toISOString().split('T')[0]
         })
         .eq('id', editingTask.id)
         .eq('created_by', user.id)
@@ -293,9 +298,9 @@ export default function ProjectDetailsPage() {
           ...task, 
           title: values.title,
           description: values.description || null,
-          due_date: values.due_date?.toISOString() || null,
+          due_date: values.due_date ? values.due_date.toISOString().split('T')[0] : null,
           status: values.status,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString().split('T')[0]
         } : task
       ))
       
