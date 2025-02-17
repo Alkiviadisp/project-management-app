@@ -1,4 +1,4 @@
-import { LayoutDashboard, FolderKanban, ListTodo, Calendar, Plus } from "lucide-react"
+import { LayoutDashboard, FolderKanban, ListTodo, Calendar, Plus, Clock } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -9,6 +9,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Separator } from "@/components/ui/separator"
+import { createClient } from "@/lib/supabase/client"
+import { useEffect, useState } from "react"
+
+type RecentProject = {
+  id: string
+  title: string
+  created_at: string
+}
 
 const pages = [
   {
@@ -36,6 +44,24 @@ const pages = [
 export function NavPages() {
   const pathname = usePathname()
   const sidebar = useSidebar()
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
+
+  useEffect(() => {
+    const fetchRecentProjects = async () => {
+      const supabase = createClient()
+      const { data: projects, error } = await supabase
+        .from('projects')
+        .select('id, title, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      if (!error && projects) {
+        setRecentProjects(projects)
+      }
+    }
+
+    fetchRecentProjects()
+  }, [])
 
   return (
     <div className="flex flex-col">
@@ -97,6 +123,46 @@ export function NavPages() {
               Create New Project
             </TooltipContent>
           </Tooltip>
+        </div>
+
+        {/* Recent Projects Section */}
+        <div className="mt-3 data-[state=collapsed]:hidden" data-state={sidebar.state}>
+          <div className="px-2 mb-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Clock className="h-4 w-4 text-blue-600" />
+              <span className="text-foreground underline decoration-[hsl(240,5%,26%)]">Recent Projects</span>
+            </div>
+          </div>
+          <nav className="space-y-1 mt-2">
+            {recentProjects.map((project) => (
+              <Tooltip key={project.id} delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Link
+                    href={`/projects/${project.id}`}
+                    className={cn(
+                      "flex h-9 w-full items-center rounded-lg px-2 text-sm",
+                      pathname === `/projects/${project.id}` ? "bg-blue-600 text-white" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      "data-[state=collapsed]:justify-center data-[state=collapsed]:w-9",
+                      "data-[state=expanded]:w-full data-[state=expanded]:justify-start",
+                      "transition-colors duration-200"
+                    )}
+                    data-state={sidebar.state}
+                  >
+                    <FolderKanban className={cn(
+                      "h-4 w-4 shrink-0",
+                      pathname === `/projects/${project.id}` ? "text-white" : "text-blue-600/50"
+                    )} />
+                    <span className={cn("ml-2 truncate", sidebar.state === "collapsed" ? "hidden" : "block")}>
+                      {project.title}
+                    </span>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="hidden data-[state=collapsed]:block">
+                  {project.title}
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </nav>
         </div>
       </div>
     </div>
