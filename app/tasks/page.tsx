@@ -85,6 +85,13 @@ import {
 } from "@dnd-kit/core"
 import { restrictToWindowEdges } from "@dnd-kit/modifiers"
 import { Suspense } from "react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 type ProjectStatus = 'todo' | 'in-progress' | 'done'
 
@@ -137,6 +144,7 @@ const taskFormSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().optional(),
   due_date: z.date().optional(),
+  status: z.enum(["todo", "in-progress", "done"]),
 })
 
 type TaskFormValues = z.infer<typeof taskFormSchema>
@@ -168,6 +176,7 @@ function TaskList() {
       title: "",
       description: "",
       due_date: undefined,
+      status: "todo",
     },
   })
 
@@ -241,12 +250,14 @@ function TaskList() {
         title: editingTask.title,
         description: editingTask.description || "",
         due_date: editingTask.due_date ? new Date(editingTask.due_date) : undefined,
+        status: editingTask.status,
       })
     } else {
       form.reset({
         title: "",
         description: "",
         due_date: undefined,
+        status: "todo",
       })
     }
   }, [editingTask, form])
@@ -397,12 +408,29 @@ function TaskList() {
         title: values.title,
         description: values.description || null,
         due_date: values.due_date?.toISOString() || null,
+        status: values.status,
         updated_at: new Date().toISOString()
       }
 
+      // Update task using raw SQL to ensure proper enum handling
+      const { error: updateError } = await supabase
+        .rpc('update_task_status', {
+          p_task_id: editingTask.id,
+          p_user_id: user.id,
+          p_status: values.status
+        })
+
+      if (updateError) throw updateError
+
+      // Update other fields
       const { data, error } = await supabase
         .from('tasks')
-        .update(updatedTask)
+        .update({
+          title: values.title,
+          description: values.description || null,
+          due_date: values.due_date?.toISOString() || null,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', editingTask.id)
         .eq('created_by', user.id)
         .select()
@@ -882,6 +910,28 @@ function TaskList() {
                         />
                       </PopoverContent>
                     </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-12 text-base">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="todo">To Do</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="done">Done</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

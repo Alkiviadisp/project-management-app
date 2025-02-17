@@ -78,6 +78,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 type ProjectStatus = 'todo' | 'in-progress' | 'done'
 
@@ -116,6 +123,7 @@ const taskFormSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().optional(),
   due_date: z.date().optional(),
+  status: z.enum(["todo", "in-progress", "done"]),
 })
 
 type TaskFormValues = z.infer<typeof taskFormSchema>
@@ -130,6 +138,8 @@ export default function ProjectDetailsPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingTask, setEditingTask] = React.useState<Task | null>(null)
   const [isCompletedTasksOpen, setIsCompletedTasksOpen] = React.useState(false)
+  const [selectedTask, setSelectedTask] = React.useState<Task | null>(null)
+  const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
   const supabase = createClient()
   const router = useRouter()
   const form = useForm<TaskFormValues>({
@@ -138,6 +148,7 @@ export default function ProjectDetailsPage() {
       title: "",
       description: "",
       due_date: undefined,
+      status: "todo",
     },
   })
 
@@ -222,7 +233,7 @@ export default function ProjectDetailsPage() {
           title: values.title,
           description: values.description,
           due_date: values.due_date?.toISOString() || null,
-          status: 'todo',
+          status: values.status,
           project_id: projectId,
           created_by: user.id
         })
@@ -251,16 +262,25 @@ export default function ProjectDetailsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("User not found")
 
-      const updatedTask = {
-        title: values.title,
-        description: values.description || null,
-        due_date: values.due_date?.toISOString() || null,
-        updated_at: new Date().toISOString()
-      }
+      // Update task using raw SQL to ensure proper enum handling
+      const { error: updateError } = await supabase
+        .rpc('update_task_status', {
+          p_task_id: editingTask.id,
+          p_user_id: user.id,
+          p_status: values.status
+        })
 
+      if (updateError) throw updateError
+
+      // Update other fields
       const { data, error } = await supabase
         .from('tasks')
-        .update(updatedTask)
+        .update({
+          title: values.title,
+          description: values.description || null,
+          due_date: values.due_date?.toISOString() || null,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', editingTask.id)
         .eq('created_by', user.id)
         .select()
@@ -269,7 +289,14 @@ export default function ProjectDetailsPage() {
       if (error) throw error
 
       setTasks(prev => prev.map(task => 
-        task.id === editingTask.id ? { ...task, ...updatedTask } : task
+        task.id === editingTask.id ? { 
+          ...task, 
+          title: values.title,
+          description: values.description || null,
+          due_date: values.due_date?.toISOString() || null,
+          status: values.status,
+          updated_at: new Date().toISOString()
+        } : task
       ))
       
       form.reset()
@@ -291,12 +318,14 @@ export default function ProjectDetailsPage() {
         title: editingTask.title,
         description: editingTask.description || "",
         due_date: editingTask.due_date ? new Date(editingTask.due_date) : undefined,
+        status: editingTask.status,
       })
     } else {
       form.reset({
         title: "",
         description: "",
         due_date: undefined,
+        status: "todo",
       })
     }
   }, [editingTask, form])
@@ -726,11 +755,18 @@ export default function ProjectDetailsPage() {
                       completedTasks.map((task) => (
                         <div
                           key={task.id}
-                          className="group relative overflow-visible bg-red-50/50 px-5 py-4"
+                          onClick={() => {
+                            setSelectedTask(task)
+                            setIsDetailsOpen(true)
+                          }}
+                          className="group relative overflow-visible bg-red-50/50 px-5 py-4 cursor-pointer"
                         >
                           <div className="relative flex items-start gap-4">
                             <button
-                              onClick={() => toggleTaskStatus(task.id, task.status)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTaskStatus(task.id, task.status)
+                              }}
                               className="mt-1 flex-shrink-0 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 rounded-full"
                               aria-label="Mark task as incomplete"
                             >
@@ -762,39 +798,6 @@ export default function ProjectDetailsPage() {
                               </div>
                             </div>
                             <div className="absolute right-0 top-0 flex items-center gap-2 invisible group-hover:visible">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    const { data: { user } } = await supabase.auth.getUser()
-                                    if (!user) throw new Error("User not found")
-
-                                    const { error: updateError } = await supabase
-                                      .rpc('update_task_status', {
-                                        p_task_id: task.id,
-                                        p_user_id: user.id,
-                                        p_status: 'todo'
-                                      })
-
-                                    if (updateError) throw updateError
-
-                                    setTasks(prev => prev.map(t => 
-                                      t.id === task.id ? { ...t, status: 'todo' } : t
-                                    ))
-
-                                    toast.success("Task moved back to todo")
-                                  } catch (error) {
-                                    console.error('Error updating task:', error)
-                                    toast.error("Failed to update task status")
-                                  }
-                                }}
-                                className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-green-50 hover:shadow-md cursor-pointer"
-                                title="Return to Todo"
-                              >
-                                <RotateCcw className="h-4 w-4 text-green-600" />
-                              </Button>
                               <Button
                                 size="icon"
                                 variant="ghost"
@@ -949,6 +952,28 @@ export default function ProjectDetailsPage() {
                             </FormItem>
                           )}
                         />
+                        <FormField
+                          control={form.control}
+                          name="status"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium">Status</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="h-12 text-base shadow-sm transition-shadow focus:shadow-md">
+                                    <SelectValue placeholder="Select status" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="todo">To Do</SelectItem>
+                                  <SelectItem value="in-progress">In Progress</SelectItem>
+                                  <SelectItem value="done">Done</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                         <DialogFooter>
                           <Button
                             type="submit"
@@ -987,8 +1012,12 @@ export default function ProjectDetailsPage() {
                 {activeTasks.map((task) => (
                   <div
                     key={task.id}
+                    onClick={() => {
+                      setSelectedTask(task)
+                      setIsDetailsOpen(true)
+                    }}
                     className={cn(
-                      "group relative overflow-visible rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100",
+                      "group relative overflow-visible rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100 cursor-pointer",
                       task.due_date && new Date() > new Date(task.due_date) && task.status !== 'done' && "bg-red-50/50 border-red-100",
                       task.status === 'done' && !task.due_date && "bg-slate-50/50",
                       task.status === 'in-progress' && !task.due_date && "bg-blue-50/50"
@@ -1027,7 +1056,10 @@ export default function ProjectDetailsPage() {
 
                     <div className="relative flex items-start gap-4">
                       <button
-                        onClick={() => toggleTaskStatus(task.id, task.status)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTaskStatus(task.id, task.status)
+                        }}
                         className="mt-1 flex-shrink-0 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 rounded-full"
                         aria-label={`Mark task as ${task.status === 'done' ? 'incomplete' : 'complete'}`}
                       >
@@ -1091,6 +1123,125 @@ export default function ProjectDetailsPage() {
           </div>
         </main>
       </SidebarInset>
+
+      {/* Task Details Dialog */}
+      <Dialog 
+        open={isDetailsOpen} 
+        onOpenChange={setIsDetailsOpen}
+      >
+        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden">
+          {selectedTask && (
+            <div className="flex flex-col h-full">
+              <DialogHeader className="p-6 pb-4 border-b space-y-4">
+                <div className="flex items-center justify-between">
+                  <Badge 
+                    variant="secondary" 
+                    className={cn(
+                      "px-2.5 py-0.5 text-xs font-semibold",
+                      getStatusColor(selectedTask.status)
+                    )}
+                  >
+                    {selectedTask.status.replace('-', ' ')}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <DialogTitle className="text-xl font-semibold tracking-tight">{selectedTask.title}</DialogTitle>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 flex-shrink-0"
+                    onClick={() => {
+                      setIsDetailsOpen(false)
+                      setEditingTask(selectedTask)
+                      setIsDialogOpen(true)
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+                <DialogDescription className="text-sm text-gray-500">
+                  View and manage task details, status, and timeline.
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Task Details */}
+              <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+                {/* Description */}
+                {selectedTask.description && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-gray-600">Description</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {selectedTask.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Dates & Timeline */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-gray-600">Due Date</h3>
+                    <div className="flex items-center gap-2 text-sm">
+                      <CalendarDays className="h-4 w-4 text-gray-500" />
+                      <span>{selectedTask.due_date ? format(new Date(selectedTask.due_date), 'MMM d, yyyy') : 'No due date'}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-gray-600">Created</h3>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-4 w-4 text-gray-500" />
+                      <span>{format(new Date(selectedTask.created_at), 'MMM d, yyyy')}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-6 pt-4 border-t bg-gray-50/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTaskStatus(selectedTask.id, selectedTask.status)
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      {selectedTask.status === 'done' ? (
+                        <>
+                          <RotateCcw className="h-4 w-4" />
+                          <span>Reopen Task</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Mark as Done</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Are you sure you want to delete this task?')) {
+                        deleteTask(selectedTask.id)
+                        setIsDetailsOpen(false)
+                      }
+                    }}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Task
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   )
 } 
