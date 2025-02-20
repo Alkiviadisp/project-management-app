@@ -404,10 +404,13 @@ function TaskList() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("User not found")
 
+      // Format the date in local timezone to prevent UTC conversion issues
+      const formattedDate = values.due_date ? format(values.due_date, 'yyyy-MM-dd') : null;
+
       const updatedTask = {
         title: values.title,
         description: values.description || null,
-        due_date: values.due_date ? values.due_date.toISOString().split('T')[0] : null,
+        due_date: formattedDate,
         status: values.status,
         updated_at: new Date().toISOString().split('T')[0]
       }
@@ -428,7 +431,7 @@ function TaskList() {
         .update({
           title: values.title,
           description: values.description || null,
-          due_date: values.due_date ? values.due_date.toISOString().split('T')[0] : null,
+          due_date: formattedDate,
           updated_at: new Date().toISOString().split('T')[0]
         })
         .eq('id', editingTask.id)
