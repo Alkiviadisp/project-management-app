@@ -341,8 +341,22 @@ function ProjectList() {
                       <ListTodo className="h-4 w-4 text-blue-600" />
                     </CardHeader>
                     <CardContent>
-                      <div className="h-[80px]">
+                      <div className="h-[80px] flex items-center justify-between">
                         <DynamicPieChart data={pieChartData} />
+                        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <div className="h-2 w-2 rounded-full bg-[#94a3b8]" />
+                            <span>To Do ({todoCount})</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="h-2 w-2 rounded-full bg-[#22c55e]" />
+                            <span>In Progress ({inProgressCount})</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="h-2 w-2 rounded-full bg-[#ef4444]" />
+                            <span>Done ({doneCount})</span>
+                          </div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -545,18 +559,22 @@ function ProjectList() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredProjects
                   .filter(project => project.status !== 'done')
-                  .map((project) => {
-                    const colors = getCardColors(project.color)
-                    return (
-                      <div
-                        key={project.id}
-                        className={cn(
-                          "group relative flex overflow-hidden rounded-lg border transition-all hover:shadow-md min-h-[200px]",
-                          new Date() > new Date(project.due_date) && project.status !== 'done' ? "bg-red-50 border-red-200" : "bg-white",
-                          "hover:bg-slate-50"
-                        )}
-                      >
-                        <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+                  .map((project) => (
+                    <Link 
+                      key={project.id}
+                      href={`/projects/${project.id}`}
+                      className="group relative block overflow-hidden rounded-xl bg-white shadow-lg"
+                    >
+                      <div className="relative">
+                        {/* Colored top section */}
+                        <div className={cn("h-[66px] flex items-center px-6", project.color)}>
+                          <h3 className="line-clamp-1 text-xl font-semibold text-white">
+                            {project.title}
+                          </h3>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="absolute right-4 top-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -565,9 +583,9 @@ function ProjectList() {
                               e.stopPropagation()
                               handleEditProject(project.id)
                             }}
-                            className="h-7 w-7 bg-white/80 hover:bg-white shadow-sm hover:text-blue-600"
+                            className="h-8 w-8 bg-white/90 hover:bg-white shadow-sm"
                           >
-                            <Edit2 className="h-3.5 w-3.5" />
+                            <Edit2 className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -579,40 +597,38 @@ function ProjectList() {
                                 handleDeleteProject(project.id)
                               }
                             }}
-                            className="h-7 w-7 bg-white/80 hover:bg-white shadow-sm hover:text-red-600"
+                            className="h-8 w-8 bg-white/90 hover:bg-white shadow-sm"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
 
-                        <div className="flex-1 p-4">
-                          <div className="space-y-3">
-                            <div className="space-y-1">
-                              <h3 className="text-base font-semibold line-clamp-1 text-gray-900">
-                                {project.title}
-                              </h3>
-                              <p className="text-xs text-muted-foreground line-clamp-2">
-                                {project.description}
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap gap-1.5">
-                              <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(project.status))}>
-                                {project.status.replace('-', ' ')}
-                              </Badge>
-                              <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getPriorityColor(project.priority))}>
-                                {project.priority}
-                              </Badge>
-                            </div>
+                        {/* Content section */}
+                        <div className="p-6 pt-6">
+                          <div className="mb-4">
+                            <p className="line-clamp-2 text-sm text-gray-500">
+                              {project.description}
+                            </p>
                           </div>
 
-                          <div className="mt-8 space-y-3">
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          {/* Status and Priority */}
+                          <div className="mb-4 flex flex-wrap gap-2">
+                            <Badge variant="secondary" className={cn("px-2 py-0.5 text-xs", getStatusColor(project.status))}>
+                              {project.status === 'in-progress' ? 'In Progress' : project.status}
+                            </Badge>
+                            <Badge variant="secondary" className={cn("px-2 py-0.5 text-xs", getPriorityColor(project.priority))}>
+                              {project.priority}
+                            </Badge>
+                          </div>
+
+                          {/* Task Progress */}
+                          <div className="mb-4">
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
                               <ListTodo className="h-3 w-3" />
                               <div className="flex-1">
-                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden transition-colors group-hover:bg-slate-200">
+                                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                                   <div 
-                                    className="h-full bg-blue-500 rounded-full transition-all" 
+                                    className={cn("h-full rounded-full transition-all", project.color)}
                                     style={{ 
                                       width: `${getProjectTaskCount(project.id).total === 0 ? 0 : 
                                         (getProjectTaskCount(project.id).completed / getProjectTaskCount(project.id).total) * 100}%` 
@@ -622,51 +638,48 @@ function ProjectList() {
                               </div>
                               <span className="flex-shrink-0">{getProjectTaskCount(project.id).completed}/{getProjectTaskCount(project.id).total}</span>
                             </div>
-
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <CalendarDays className="h-3 w-3" />
-                                <span className={cn(
-                                  new Date() > new Date(project.due_date) && "text-red-600 font-medium"
-                                )}>
-                                  Due {format(new Date(project.due_date), 'MMM d, yyyy')}
-                                  {new Date() > new Date(project.due_date) && " (Overdue)"}
-                                </span>
-                              </div>
-                              {project.tags.length > 0 && (
-                                <div className="flex items-center gap-1.5">
-                                  <Tag className="h-3 w-3 text-muted-foreground" />
-                                  <div className="flex flex-wrap gap-1">
-                                    {project.tags.map((tag, index) => (
-                                      <Badge
-                                        key={index}
-                                        variant="secondary"
-                                        className="px-1.5 py-0 text-xs bg-slate-100 text-slate-700"
-                                      >
-                                        {tag}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {project.attachments.length > 1 && (
-                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                  <Paperclip className="h-3 w-3" />
-                                  <span>{project.attachments.length} attachments</span>
-                                </div>
-                              )}
-                            </div>
                           </div>
+
+                          {/* Due Date */}
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
+                            <CalendarDays className="h-3 w-3" />
+                            <span className={cn(
+                              new Date() > new Date(project.due_date) && project.status !== 'done' && "text-red-600 font-medium"
+                            )}>
+                              Due {format(new Date(project.due_date), 'MMM d, yyyy')}
+                              {new Date() > new Date(project.due_date) && project.status !== 'done' && " (Overdue)"}
+                            </span>
+                          </div>
+
+                          {/* Tags */}
+                          {project.tags.length > 0 && (
+                            <div className="flex items-center gap-1.5 mb-3">
+                              <Tag className="h-3 w-3 text-gray-500" />
+                              <div className="flex flex-wrap gap-1">
+                                {project.tags.map((tag, index) => (
+                                  <Badge
+                                    key={index}
+                                    variant="secondary"
+                                    className="px-1.5 py-0 text-xs bg-gray-100 text-gray-700"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Attachments */}
+                          {project.attachments.length > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                              <Paperclip className="h-3 w-3" />
+                              <span>{project.attachments.length} attachment{project.attachments.length > 1 ? 's' : ''}</span>
+                            </div>
+                          )}
                         </div>
-                        <Link 
-                          href={`/projects/${project.id}`} 
-                          className="absolute inset-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                          <span className="sr-only">View project</span>
-                        </Link>
                       </div>
-                    )
-                  })}
+                    </Link>
+                  ))}
               </div>
             )}
           </div>

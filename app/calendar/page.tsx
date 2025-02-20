@@ -477,6 +477,23 @@ function CalendarContent() {
                     background: rgb(255 255 255 / 1.0);
                   }
 
+                  /* Style today's cell */
+                  .fc .fc-day-today {
+                    background-color: hsl(251, 17%, 87%) !important;
+                    border: none !important;
+                  }
+
+                  /* Style today's cell content */
+                  .fc .fc-day-today .fc-daygrid-day-number {
+                    background: transparent;
+                    color: white;
+                  }
+
+                  /* Style today's cell events for better contrast */
+                  .fc .fc-day-today .task-event {
+                    opacity: 0.9;
+                  }
+
                   .fc .fc-scrollgrid-section-header table {
                     border-bottom: 1px solid #e5e7eb;
                     background: rgb(255 255 255 / 1.0);

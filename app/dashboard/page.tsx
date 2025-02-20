@@ -48,6 +48,7 @@ type Task = {
   status: "todo" | "in-progress" | "done"
   project_id: string
   due_date: string | null
+  created_at: string
 }
 
 type Project = {
@@ -111,6 +112,10 @@ const chartConfig = {
   projects: {
     label: "Projects",
     color: "#00C2FF", // Electric Blue for bar chart
+  },
+  tasks: {
+    label: "Tasks",
+    color: "#01E076", // Bright Green for tasks bar chart
   },
   todo: {
     label: "To Do",
@@ -246,6 +251,34 @@ export default function DashboardPage() {
     })
   }, [projects])
 
+  // Add this after the projectProgressData calculation
+  const taskProgressData = React.useMemo(() => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = subDays(new Date(), i)
+      date.setHours(0, 0, 0, 0)
+      return date
+    }).reverse()
+
+    return last7Days.map(date => {
+      const dayTasks = projects.reduce((count, project) => {
+        if (!Array.isArray(project.tasks)) return count
+        
+        const tasksOnDay = project.tasks.filter(task => {
+          const taskDate = new Date(task.created_at)
+          taskDate.setHours(0, 0, 0, 0)
+          return taskDate.getTime() === date.getTime()
+        })
+
+        return count + tasksOnDay.length
+      }, 0)
+
+      return {
+        date: format(date, 'MMM dd'),
+        tasks: dayTasks,
+      }
+    })
+  }, [projects])
+
   // Update the projectStatusData with new colors
   const projectStatusData = React.useMemo(() => [
     { status: "todo", count: projects.filter(p => p.status === "todo").length, fill: "#01E076" }, // Green
@@ -272,7 +305,7 @@ export default function DashboardPage() {
         const projectsWithTasks = await Promise.all(projectsData.map(async (project) => {
           const { data: tasksData, error: tasksError } = await supabase
             .from('tasks')
-            .select('id, title, status, project_id, due_date')
+            .select('id, title, status, project_id, due_date, created_at')
             .eq('project_id', project.id)
 
           if (tasksError) {
@@ -418,7 +451,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Charts Section */}
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Project Progress</CardTitle>
@@ -451,9 +484,43 @@ export default function DashboardPage() {
                 </ChartContainer>
               </CardContent>
             </Card>
+
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Status Distribution</CardTitle>
+                <CardTitle className="text-sm font-medium">Task Progress</CardTitle>
+                <CardDescription className="text-xs">Last 7 days</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer 
+                  config={chartConfig}
+                  className="mx-auto h-[120px]"
+                >
+                  <BarChart data={taskProgressData}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      tickMargin={10}
+                      axisLine={false}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <ChartTooltip
+                      cursor={false}
+                      content={<ChartTooltipContent hideLabel />}
+                    />
+                    <Bar 
+                      dataKey="tasks" 
+                      fill="#01E076"
+                      radius={[4, 4, 0, 0]} 
+                    />
+                  </BarChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Project Status Distribution</CardTitle>
                 <CardDescription className="text-xs">{format(new Date(), 'MMMM yyyy')}</CardDescription>
               </CardHeader>
               <CardContent>
