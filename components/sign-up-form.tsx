@@ -10,7 +10,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -23,7 +22,6 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { FileInput } from "@/components/ui/file-input"
 import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -41,7 +39,6 @@ const formSchema = z.object({
 
 export function SignUpForm() {
   const [isLoading, setIsLoading] = React.useState(false)
-  const [avatarFile, setAvatarFile] = React.useState<File | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -58,46 +55,6 @@ export function SignUpForm() {
     try {
       setIsLoading(true)
 
-      let avatarUrl = null
-      let uploadedFileName = null
-
-      // Upload avatar if selected
-      if (avatarFile) {
-        const fileExt = avatarFile.name.split('.').pop()
-        // Create a more structured file path
-        uploadedFileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
-        
-        // Upload the avatar
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(uploadedFileName, avatarFile, {
-            cacheControl: '3600',
-            upsert: false
-          })
-
-        if (uploadError) {
-          if (uploadError.message.includes('duplicate')) {
-            toast.error("Upload Failed", {
-              description: "A file with this name already exists. Please try again.",
-              duration: 5000,
-            })
-          } else {
-            toast.error("Upload Failed", {
-              description: "Failed to upload avatar. Please try again.",
-              duration: 5000,
-            })
-          }
-          throw uploadError
-        }
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(uploadedFileName)
-
-        avatarUrl = publicUrl
-      }
-
       // Sign up with Supabase Auth
       const { data, error: authError } = await supabase.auth.signUp({
         email: values.email,
@@ -105,26 +62,13 @@ export function SignUpForm() {
         options: {
           data: {
             nickname: values.nickname,
-            avatar_url: avatarUrl,
           },
           emailRedirectTo: `${window.location.origin}/login`,
         },
       })
 
       if (authError) {
-        // If sign up fails, clean up the uploaded avatar
-        if (uploadedFileName) {
-          try {
-            await supabase.storage
-              .from('avatars')
-              .remove([uploadedFileName])
-              .catch(error => {
-                console.error('Failed to clean up avatar after failed sign-up:', error)
-              })
-          } catch (error) {
-            console.error('Error while cleaning up avatar:', error)
-          }
-        }
+        console.error('Auth error:', authError)
 
         if (authError.message.includes('email')) {
           toast.error("Email Already Registered", {
@@ -149,7 +93,6 @@ export function SignUpForm() {
         toast.success("Account Created!", {
           description: "Please check your email (including spam folder) to verify your account before logging in.",
           duration: 8000, // Longer duration for important message
-          important: true, // Makes the toast persist
         })
         // Add a slight delay before redirect to ensure the user sees the message
         await new Promise(resolve => setTimeout(resolve, 1000))
@@ -174,88 +117,136 @@ export function SignUpForm() {
     }
   }
 
+  const handleGoogleSignUp = async () => {
+    try {
+      setIsLoading(true)
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        }
+      })
+
+      if (error) {
+        toast.error("Sign Up Failed", {
+          description: "Failed to sign up with Google. Please try again.",
+        })
+      }
+    } catch (error) {
+      toast.error("Sign Up Failed", {
+        description: "An unexpected error occurred. Please try again.",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
-    <Card className="border-none shadow-none">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl">Create an account</CardTitle>
-        <CardDescription>
-          Enter your information below to create your account
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
-            <div className="flex justify-center">
-              <FileInput
-                onFileSelect={(file) => setAvatarFile(file)}
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">Create an account</CardTitle>
+          <CardDescription>
+            Enter your information below to create your account
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="you@example.com" 
+                        type="email"
+                        autoCapitalize="none"
+                        autoComplete="email"
+                        autoCorrect="off"
+                        disabled={isLoading}
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="you@example.com" 
-                      type="email"
-                      autoComplete="email"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="nickname"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nickname</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="johndoe"
-                      autoComplete="username"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="password"
-                      autoComplete="new-password"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Creating account..." : "Create account"}
-            </Button>
-          </form>
-        </Form>
-      </CardContent>
-      <CardFooter>
-        <div className="text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link href="/login" className="text-primary hover:underline">
-            Sign in
-          </Link>
-        </div>
-      </CardFooter>
-    </Card>
+              <FormField
+                control={form.control}
+                name="nickname"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nickname</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="johndoe"
+                        autoComplete="username"
+                        disabled={isLoading}
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        disabled={isLoading}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Creating account...
+                  </div>
+                ) : (
+                  "Create account"
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={isLoading}
+                onClick={handleGoogleSignUp}
+              >
+                Sign up with Google
+              </Button>
+            </form>
+          </Form>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link href="/login" className="text-primary hover:underline">
+              Sign in
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 } 

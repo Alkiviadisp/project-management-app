@@ -61,7 +61,7 @@ export function NavUser({
       if (error) throw error
       
       toast.success("Logged out successfully")
-      router.push("/login")
+      router.push("/")
     } catch (error) {
       console.error(error)
       toast.error("Failed to log out")
