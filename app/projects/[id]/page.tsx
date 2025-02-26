@@ -340,18 +340,8 @@ export default function ProjectDetailsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("User not found")
 
-      // Cycle through statuses: todo -> in-progress -> done -> todo
-      const newStatus: Project['status'] = (() => {
-        switch (currentStatus) {
-          case 'todo':
-            return 'in-progress'
-          case 'in-progress':
-            return 'done'
-          case 'done':
-          default:
-            return 'todo'
-        }
-      })()
+      // Simply toggle between done and not done
+      const newStatus: Project['status'] = currentStatus === 'done' ? 'todo' : 'done';
 
       // Update task using the stored procedure
       const { error: updateError } = await supabase
@@ -367,8 +357,7 @@ export default function ProjectDetailsPage() {
         task.id === taskId ? { ...task, status: newStatus } : task
       ))
 
-      const statusDisplay = newStatus === 'in-progress' ? 'in progress' : newStatus
-      toast.success(`Task marked as ${statusDisplay}`)
+      toast.success(`Task marked as ${newStatus === 'done' ? 'completed' : 'to do'}`)
     } catch (error) {
       console.error('Error updating task status:', error)
       toast.error("Failed to update task status")
