@@ -702,9 +702,19 @@ export default function ProjectDetailsPage() {
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
+              <Button
+                variant="ghost"
+                size="icon"
+                asChild
+                className="mr-2 h-8 w-8 hover:bg-gray-100"
+              >
+                <Link href="/projects">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
-                  <CalendarIcon className="h-5 w-5 text-blue-600" />
+                  <FolderKanban className="h-5 w-5 text-blue-600" />
                 </div>
                 <h1 className="text-xl font-semibold">Project Details</h1>
               </div>
