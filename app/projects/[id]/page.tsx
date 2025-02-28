@@ -177,9 +177,11 @@ function DroppableColumn({ id, title, children, className }: {
           className
         )}
       >
-        <div className="space-y-4 pb-20">
-          {children}
-        </div>
+        {isMainColumn ? (
+          <div className="space-y-4 pb-20">
+            {children}
+          </div>
+        ) : children}
       </div>
     </div>
   )
