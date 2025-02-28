@@ -321,7 +321,7 @@ function ProjectForm() {
       <AppSidebar className="hidden lg:block" />
       <SidebarInset className="bg-gradient-to-br from-white to-blue-50/20">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-          <div className="flex w-full items-center justify-between px-4">
+          <div className="flex w-full items-center justify-between px-4 md:px-6">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
@@ -334,10 +334,10 @@ function ProjectForm() {
             </div>
           </div>
         </header>
-        <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-start py-10 px-4">
-          <div className="w-full max-w-6xl">
-            <div className="mb-12">
-              <div className="flex items-center gap-4 mb-8">
+        <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-start py-6 px-4 md:px-6">
+          <div className="w-full">
+            <div className="mb-8">
+              <div className="flex items-center gap-4 mb-6">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -353,18 +353,18 @@ function ProjectForm() {
               <h1 className="text-4xl font-bold tracking-tight">
                 {isEditing ? 'Edit Project' : 'Create New Project'}
               </h1>
-              <p className="mt-4 text-muted-foreground text-lg max-w-2xl">
+              <p className="mt-4 text-muted-foreground text-lg">
                 {isEditing 
                   ? 'Update your project information below. All fields can be modified.'
                   : 'Start by filling in the essential information about your project. You can always update these details later.'}
               </p>
             </div>
 
-            <div className="space-y-8">
+            <div className="space-y-6">
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                  <div className="space-y-8 rounded-xl border bg-white p-8 shadow-sm">
-                    <div className="flex items-center gap-3 pb-6 border-b">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <div className="space-y-6 rounded-xl border bg-white p-6 md:p-8 shadow-sm">
+                    <div className="flex items-center gap-3 pb-4 border-b">
                       <div className="flex items-center gap-2">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
                           <FolderKanban className="h-5 w-5 text-blue-600" />
@@ -567,8 +567,8 @@ function ProjectForm() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                      <div className="space-y-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="space-y-6">
                         <FormField
                           control={form.control}
                           name="title"
@@ -608,7 +608,7 @@ function ProjectForm() {
                           )}
                         />
 
-                        <div className="grid gap-8 md:grid-cols-2">
+                        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2">
                           <FormField
                             control={form.control}
                             name="status"
@@ -714,7 +714,7 @@ function ProjectForm() {
                         />
                       </div>
 
-                      <div className="space-y-8">
+                      <div className="space-y-6">
                         <FormField
                           control={form.control}
                           name="description"
@@ -775,7 +775,7 @@ function ProjectForm() {
                     </div>
                   </div>
 
-                  <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t bg-white/80 backdrop-blur-sm p-4 sm:px-6">
+                  <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t bg-white/80 backdrop-blur-sm p-4 px-4 md:px-6">
                     <Button
                       type="button"
                       variant="outline"

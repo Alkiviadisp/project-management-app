@@ -85,6 +85,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+} from "@dnd-kit/core"
+import { restrictToWindowEdges } from "@dnd-kit/modifiers"
 
 type ProjectStatus = 'todo' | 'in-progress' | 'done'
 
@@ -128,6 +140,140 @@ const taskFormSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskFormSchema>
 
+// Add getStatusColor function
+function getStatusColor(status: ProjectStatus) {
+  switch (status) {
+    case 'todo':
+      return 'bg-gray-100 text-gray-800'
+    case 'in-progress':
+      return 'bg-green-100 text-green-800'
+    case 'done':
+      return 'bg-red-100 text-red-800'
+    default:
+      return 'bg-gray-100 text-gray-800'
+  }
+}
+
+// Add DroppableColumn component
+function DroppableColumn({ id, title, children, className }: { 
+  id: string; 
+  title: string; 
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { setNodeRef } = useDroppable({ id })
+  const isMainColumn = id === 'todo' || id === 'in-progress'
+
+  return (
+    <div className="h-full w-full">
+      {title && <h2 className="text-lg font-semibold mb-4">{title}</h2>}
+      <div 
+        ref={setNodeRef} 
+        className={cn(
+          "relative",
+          isMainColumn && "p-6 rounded-lg border-2 border-dashed transition-colors min-h-[400px] h-fit w-full",
+          isMainColumn && id === "todo" && "bg-gray-50/50 border-gray-200",
+          isMainColumn && id === "in-progress" && "bg-green-50/50 border-green-200",
+          className
+        )}
+      >
+        <div className="space-y-4 pb-20">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Add TaskCard component
+function TaskCard({ 
+  task, 
+  isDragging,
+  onEdit,
+  onTaskClick
+}: { 
+  task: Task; 
+  isDragging?: boolean;
+  onEdit: (task: Task) => void;
+  onTaskClick: (task: Task) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging: isBeingDragged } = useDraggable({
+    id: task.id,
+    data: task,
+  })
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    opacity: isBeingDragged ? 0 : 1
+  } : undefined
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isDragging) {
+      onTaskClick(task)
+    }
+  }
+
+  const isOverdue = task.due_date && new Date() > new Date(task.due_date) && task.status !== 'done'
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onClick={handleClick}
+      className={cn(
+        "group relative rounded-lg border bg-white p-4 shadow-sm transition-all hover:shadow-md touch-none",
+        isDragging && "shadow-lg cursor-grabbing",
+        !isDragging && "cursor-pointer hover:border-blue-200",
+        isOverdue && "bg-red-50/50 border-red-200",
+        task.status === 'in-progress' && "bg-blue-50/50",
+        task.status === 'done' && "bg-slate-50/50"
+      )}
+    >
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">{task.title}</h3>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-700 hover:bg-blue-50"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(task)
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs", getStatusColor(task.status))}>
+              {task.status.replace('-', ' ')}
+            </Badge>
+          </div>
+        </div>
+        {task.description && (
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {task.description}
+          </p>
+        )}
+        <div className="flex items-center gap-4">
+          {task.due_date && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CalendarDays className="h-3 w-3" />
+              <span className={cn(
+                isOverdue && "text-red-600 font-medium"
+              )}>
+                Due {format(new Date(task.due_date), 'MMM d, yyyy')}
+                {isOverdue && " (Overdue)"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ProjectDetailsPage() {
   const params = useParams()
   const projectId = params.id as string
@@ -140,6 +286,7 @@ export default function ProjectDetailsPage() {
   const [isCompletedTasksOpen, setIsCompletedTasksOpen] = React.useState(false)
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
+  const [activeTask, setActiveTask] = React.useState<Task | null>(null)
   const supabase = createClient()
   const router = useRouter()
   const form = useForm<TaskFormValues>({
@@ -151,6 +298,13 @@ export default function ProjectDetailsPage() {
       status: "todo",
     },
   })
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  )
 
   React.useEffect(() => {
     async function fetchProjectAndTasks() {
@@ -473,23 +627,57 @@ export default function ProjectDetailsPage() {
     return sortedTasks.filter(task => task.status === 'done')
   }, [sortedTasks])
 
+  // Add handleDragEnd function
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    
+    if (!over) return
+
+    const taskId = active.id as string
+    const newStatus = over.id as "todo" | "in-progress" | "done"
+    const task = tasks.find(t => t.id === taskId)
+    
+    if (!task || task.status === newStatus) return
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("User not found")
+
+      // Update task using raw SQL to ensure proper enum handling
+      const { error: updateError } = await supabase
+        .rpc('update_task_status', {
+          p_task_id: taskId,
+          p_user_id: user.id,
+          p_status: newStatus
+        })
+
+      if (updateError) throw updateError
+
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, status: newStatus } : t
+      ))
+
+      toast.success(`Task moved to ${newStatus.replace('-', ' ')}`)
+    } catch (error) {
+      console.error('Error updating task:', error)
+      toast.error("Failed to update task status")
+    }
+
+    setActiveTask(null)
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const taskId = event.active.id as string
+    const task = tasks.find(t => t.id === taskId)
+    if (task) setActiveTask(task)
+  }
+
   if (isLoading || !project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-pulse text-lg">Loading...</div>
       </div>
     )
-  }
-
-  const getStatusColor = (status: Project['status']) => {
-    switch (status) {
-      case 'todo':
-        return 'bg-gray-100 text-gray-700'
-      case 'in-progress':
-        return 'bg-blue-100 text-blue-700'
-      case 'done':
-        return 'bg-green-100 text-green-700'
-    }
   }
 
   const getPriorityColor = (priority: Project['priority']) => {
@@ -506,32 +694,28 @@ export default function ProjectDetailsPage() {
   return (
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
-      <SidebarInset className="bg-gradient-to-br from-slate-50 to-white">
-        {/* Modern Header with Glassmorphism */}
-        <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 border-b bg-white/80 backdrop-blur-md supports-[backdrop-filter]:bg-white/60">
-          <div className="flex w-full items-center justify-between px-4">
+      <SidebarInset className="bg-gradient-to-br from-white to-blue-50/20">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+          <div className="flex w-full items-center justify-between px-4 md:px-6">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 h-4" />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="group flex items-center gap-2 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
-                <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-                Back to Projects
-              </Button>
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
+                  <CalendarIcon className="h-5 w-5 text-blue-600" />
+                </div>
+                <h1 className="text-xl font-semibold">Project Details</h1>
+              </div>
             </div>
           </div>
         </header>
 
-        <main className="min-h-screen py-8 px-4">
-          <div className="mx-auto max-w-6xl space-y-8">
+        <main className="min-h-screen py-6 px-4 md:px-6">
+          <div className="w-full space-y-6">
             {/* Project Overview Card */}
             <div className="relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md">
               <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-transparent to-transparent" />
-              <div className="relative p-6 sm:p-8">
+              <div className="relative p-6">
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-4">
                     <div className="flex items-start gap-4">
@@ -550,7 +734,7 @@ export default function ProjectDetailsPage() {
                             <Pencil className="h-4 w-4" />
                           </Button>
                         </div>
-                        <p className="max-w-2xl text-sm text-slate-600">{project.description}</p>
+                        <p className="text-sm text-slate-600">{project.description}</p>
                       </div>
                     </div>
                   </div>
@@ -566,7 +750,7 @@ export default function ProjectDetailsPage() {
                           </div>
                           <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-200 ease-in-out group-data-[state=open]:rotate-180" />
                         </CollapsibleTrigger>
-                        <CollapsibleContent className="mt-2">
+                        <CollapsibleContent className="absolute mt-2 w-80 rounded-lg border bg-white p-2 shadow-lg">
                           <div className="space-y-2">
                             {project.attachments.map((attachment, index) => (
                               <div
@@ -651,7 +835,7 @@ export default function ProjectDetailsPage() {
             </div>
 
             {/* Project Stats Grid */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Status Card */}
               <div className="group relative overflow-hidden rounded-xl border bg-white p-6 shadow-sm transition-all hover:shadow-md">
                 <div className="absolute inset-0 bg-gradient-to-br from-slate-50/50 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
@@ -724,396 +908,353 @@ export default function ProjectDetailsPage() {
               </div>
             </div>
 
-            {/* Completed Tasks Section */}
-            <div className="rounded-lg border bg-white shadow-sm">
-              <Collapsible open={isCompletedTasksOpen} onOpenChange={setIsCompletedTasksOpen}>
-                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-red-600" />
-                    <span>Completed Tasks</span>
-                    <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
-                      {completedTasks.length}
-                    </Badge>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-gray-500" />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="divide-y border-t">
-                    {completedTasks.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
-                        <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                        <p>No completed tasks yet</p>
-                        <p className="text-xs mt-1">Tasks marked as done will appear here</p>
-                      </div>
-                    ) : (
-                      completedTasks.map((task) => (
-                        <div
-                          key={task.id}
-                          onClick={() => {
-                            setSelectedTask(task)
-                            setIsDetailsOpen(true)
-                          }}
-                          className="group relative overflow-visible bg-red-50/50 px-5 py-4 cursor-pointer"
-                        >
-                          <div className="relative flex items-start gap-4">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleTaskStatus(task.id, task.status)
-                              }}
-                              className="mt-1 flex-shrink-0 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 rounded-full"
-                              aria-label="Mark task as incomplete"
-                            >
-                              <CheckCircle2 className="h-5 w-5 text-red-600" />
-                            </button>
-                            <div className="flex-grow min-w-0">
-                              <h3 className="text-base font-medium text-slate-500 line-through truncate">
-                                {task.title}
-                              </h3>
-                              {task.description && (
-                                <p className="mt-1 text-sm text-slate-400 line-through line-clamp-2">
-                                  {task.description}
-                                </p>
-                              )}
-                              <div className="mt-3 flex flex-wrap items-center gap-2">
-                                {task.due_date && (
-                                  <div className="flex items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm backdrop-blur-sm ring-1 ring-slate-200/50">
-                                    <CalendarDays className="h-3.5 w-3.5" />
-                                    Due {format(new Date(task.due_date), 'MMM d, yyyy')}
-                                  </div>
-                                )}
-                                <div className="flex items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm backdrop-blur-sm ring-1 ring-slate-200/50">
-                                  <Clock className="h-3.5 w-3.5" />
-                                  {format(new Date(task.created_at), 'MMM d, yyyy')}
-                                </div>
-                                <Badge variant="secondary" className="bg-red-100 text-red-600 ring-1 ring-red-200/50">
-                                  Completed
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="absolute right-0 top-0 flex items-center gap-2 invisible group-hover:visible">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingTask(task);
-                                  setIsDialogOpen(true);
-                                }}
-                                className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-red-50 hover:shadow-md cursor-pointer"
-                              >
-                                <Pencil className="h-4 w-4 text-red-600" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm('Are you sure you want to delete this task?')) {
-                                    deleteTask(task.id);
-                                  }
-                                }}
-                                className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-red-50 hover:shadow-md cursor-pointer"
-                              >
-                                <Trash2 className="h-4 w-4 text-red-600" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            </div>
-
             {/* Tasks Section */}
-            <div className="space-y-6 rounded-2xl border bg-white p-6 shadow-sm lg:p-8">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100/50">
-                    <CheckCircle2 className="h-6 w-6 text-blue-600" />
+            <DndContext
+              sensors={sensors}
+              onDragEnd={handleDragEnd}
+              onDragStart={handleDragStart}
+              modifiers={[restrictToWindowEdges]}
+            >
+              <div className="space-y-6 rounded-2xl border bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100/50">
+                      <CheckCircle2 className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">Tasks</h2>
+                      <p className="text-sm text-slate-600">Manage and track your project tasks</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-slate-900">Tasks</h2>
-                    <p className="text-sm text-slate-600">Manage and track your project tasks</p>
+                  <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                    setIsDialogOpen(open)
+                    if (!open) setEditingTask(null)
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        onClick={() => setIsDialogOpen(true)}
+                        className="group flex items-center gap-2 bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl"
+                      >
+                        <Plus className="h-4 w-4 transition-transform group-hover:scale-110" />
+                        Add Task
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[500px]">
+                      <DialogHeader>
+                        <DialogTitle>{editingTask ? 'Edit Task' : 'Create New Task'}</DialogTitle>
+                        <DialogDescription>
+                          {editingTask 
+                            ? 'Update your task details below.'
+                            : 'Break down your project into manageable tasks to track progress effectively.'
+                          }
+                        </DialogDescription>
+                      </DialogHeader>
+                      <Form {...form}>
+                        <form onSubmit={form.handleSubmit(editingTask ? handleEditTask : handleCreateTask)} className="space-y-4 py-4">
+                          <FormField
+                            control={form.control}
+                            name="title"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm font-medium">Task Title</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="Enter task title"
+                                    className="h-12 text-base shadow-sm transition-shadow focus:shadow-md"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm font-medium">Description</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Enter task description"
+                                    className="min-h-[120px] resize-none text-base shadow-sm transition-shadow focus:shadow-md"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="due_date"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-col">
+                                <FormLabel className="text-sm font-medium">Due Date</FormLabel>
+                                <div className="relative">
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <FormControl>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          className={cn(
+                                            "w-full h-12 pl-3 text-left font-normal text-base shadow-sm transition-all hover:border-blue-200 hover:shadow-md focus:border-blue-400",
+                                            !field.value && "text-slate-500"
+                                          )}
+                                        >
+                                          {field.value ? (
+                                            format(field.value, "PPP")
+                                          ) : (
+                                            <span>Select a due date</span>
+                                          )}
+                                          <CalendarIcon className="ml-auto h-5 w-5 opacity-50" />
+                                        </Button>
+                                      </FormControl>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                      <Calendar
+                                        mode="single"
+                                        selected={field.value}
+                                        onSelect={field.onChange}
+                                        initialFocus
+                                        fromDate={new Date()}
+                                        disabled={(date) => {
+                                          const today = new Date()
+                                          today.setHours(0, 0, 0, 0)
+                                          return date < today
+                                        }}
+                                        className="rounded-md border [&_.rdp]:p-2 [&_.rdp-months]:space-y-4 [&_.rdp-table]:w-full [&_.rdp-head_th]:w-10 [&_.rdp-head_th]:p-0 [&_.rdp-head_th]:font-normal [&_.rdp-head_th]:text-sm [&_.rdp-cell]:p-0 [&_.rdp-tbody]:space-y-2 [&_.rdp-day]:h-10 [&_.rdp-day]:w-10 [&_.rdp-day]:p-0 [&_.rdp-day_button]:h-10 [&_.rdp-day_button]:w-10"
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="status"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm font-medium">Status</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger className="h-12 text-base shadow-sm transition-shadow focus:shadow-md">
+                                      <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="todo">To Do</SelectItem>
+                                    <SelectItem value="in-progress">In Progress</SelectItem>
+                                    <SelectItem value="done">Done</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <DialogFooter>
+                            <Button
+                              type="submit"
+                              disabled={isCreatingTask}
+                              className="w-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl disabled:opacity-50"
+                            >
+                              {isCreatingTask ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                  {editingTask ? 'Updating...' : 'Creating...'}
+                                </div>
+                              ) : (
+                                editingTask ? 'Update Task' : 'Create Task'
+                              )}
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                <div className="space-y-4">
+                  {activeTasks.length === 0 && completedTasks.length === 0 && (
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-white/50 py-12 text-center">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100/50 text-blue-600">
+                        <CheckCircle2 className="h-6 w-6" />
+                      </div>
+                      <h3 className="mt-4 text-sm font-medium text-slate-900">No tasks yet</h3>
+                      <p className="mt-2 max-w-sm text-sm text-slate-600">
+                        Create your first task to start tracking progress on this project
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Done Drop Zone */}
+                  <DroppableColumn 
+                    id="done" 
+                    title=""
+                    className="mt-4 h-16 border-2 border-dashed border-red-200 bg-red-50/50 rounded-lg flex items-center justify-center"
+                  >
+                    <div className="flex items-center gap-2 text-red-500">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <p className="text-sm">Drop here to mark as done</p>
+                    </div>
+                  </DroppableColumn>
+
+                  {/* Completed Tasks Section - Moved here */}
+                  {completedTasks.length > 0 && (
+                    <div className="mt-4">
+                      <Collapsible>
+                        <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors rounded-lg border">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-red-600" />
+                            <span>Completed Tasks</span>
+                            <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
+                              {completedTasks.length}
+                            </Badge>
+                          </div>
+                          <ChevronDown className="h-4 w-4 text-gray-500" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="divide-y border-t mt-2">
+                            {completedTasks.map((task) => (
+                              <div
+                                key={task.id}
+                                className="group flex items-center gap-3 bg-red-50/50 px-4 py-3"
+                              >
+                                <button
+                                  onClick={() => toggleTaskStatus(task.id, task.status)}
+                                  className="flex-shrink-0 transition-transform hover:scale-110"
+                                >
+                                  <CheckCircle2 className="h-4 w-4 text-red-600" />
+                                </button>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-gray-900">{task.title}</p>
+                                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                                    {task.due_date && (
+                                      <span className="flex items-center gap-1">
+                                        <CalendarDays className="h-3 w-3" />
+                                        Due {format(new Date(task.due_date), 'MMM d')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const { data: { user } } = await supabase.auth.getUser()
+                                        if (!user) throw new Error("User not found")
+
+                                        const { error: updateError } = await supabase
+                                          .rpc('update_task_status', {
+                                            p_task_id: task.id,
+                                            p_user_id: user.id,
+                                            p_status: 'in-progress'
+                                          })
+
+                                        if (updateError) throw updateError
+
+                                        setTasks(prev => prev.map(t => 
+                                          t.id === task.id ? { ...t, status: 'in-progress' } : t
+                                        ))
+
+                                        toast.success("Task moved back to in progress")
+                                      } catch (error) {
+                                        console.error('Error updating task:', error)
+                                        toast.error("Failed to update task status")
+                                      }
+                                    }}
+                                    className="flex-shrink-0 transition-transform hover:scale-110"
+                                    title="Return to In Progress"
+                                  >
+                                    <RotateCcw className="h-4 w-4 text-green-600 hover:text-green-700" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (window.confirm('Are you sure you want to delete this task?')) {
+                                        deleteTask(task.id)
+                                      }
+                                    }}
+                                    className="flex-shrink-0"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600 hover:text-red-700" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    {/* Active Tasks */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* To Do Column */}
+                      <DroppableColumn id="todo" title="To Do">
+                        {activeTasks
+                          .filter(task => task.status === 'todo')
+                          .map((task) => (
+                            <TaskCard 
+                              key={task.id} 
+                              task={task} 
+                              onEdit={(task) => {
+                                setEditingTask(task)
+                                setIsDialogOpen(true)
+                              }}
+                              onTaskClick={(task) => {
+                                setSelectedTask(task)
+                                setIsDetailsOpen(true)
+                              }}
+                            />
+                          ))}
+                      </DroppableColumn>
+
+                      {/* In Progress Column */}
+                      <DroppableColumn id="in-progress" title="In Progress">
+                        {activeTasks
+                          .filter(task => task.status === 'in-progress')
+                          .map((task) => (
+                            <TaskCard 
+                              key={task.id} 
+                              task={task} 
+                              onEdit={(task) => {
+                                setEditingTask(task)
+                                setIsDialogOpen(true)
+                              }}
+                              onTaskClick={(task) => {
+                                setSelectedTask(task)
+                                setIsDetailsOpen(true)
+                              }}
+                            />
+                          ))}
+                      </DroppableColumn>
+                    </div>
                   </div>
                 </div>
-                <Dialog open={isDialogOpen} onOpenChange={(open) => {
-                  setIsDialogOpen(open)
-                  if (!open) setEditingTask(null)
-                }}>
-                  <DialogTrigger asChild>
-                    <Button 
-                      onClick={() => setIsDialogOpen(true)}
-                      className="group flex items-center gap-2 bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl"
-                    >
-                      <Plus className="h-4 w-4 transition-transform group-hover:scale-110" />
-                      Add Task
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                      <DialogTitle>{editingTask ? 'Edit Task' : 'Create New Task'}</DialogTitle>
-                      <DialogDescription>
-                        {editingTask 
-                          ? 'Update your task details below.'
-                          : 'Break down your project into manageable tasks to track progress effectively.'
-                        }
-                      </DialogDescription>
-                    </DialogHeader>
-                    <Form {...form}>
-                      <form onSubmit={form.handleSubmit(editingTask ? handleEditTask : handleCreateTask)} className="space-y-4 py-4">
-                        <FormField
-                          control={form.control}
-                          name="title"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-medium">Task Title</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="Enter task title"
-                                  className="h-12 text-base shadow-sm transition-shadow focus:shadow-md"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="description"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-medium">Description</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Enter task description"
-                                  className="min-h-[120px] resize-none text-base shadow-sm transition-shadow focus:shadow-md"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="due_date"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                              <FormLabel className="text-sm font-medium">Due Date</FormLabel>
-                              <div className="relative">
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <FormControl>
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        className={cn(
-                                          "w-full h-12 pl-3 text-left font-normal text-base shadow-sm transition-all hover:border-blue-200 hover:shadow-md focus:border-blue-400",
-                                          !field.value && "text-slate-500"
-                                        )}
-                                      >
-                                        {field.value ? (
-                                          format(field.value, "PPP")
-                                        ) : (
-                                          <span>Select a due date</span>
-                                        )}
-                                        <CalendarIcon className="ml-auto h-5 w-5 opacity-50" />
-                                      </Button>
-                                    </FormControl>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                      mode="single"
-                                      selected={field.value}
-                                      onSelect={field.onChange}
-                                      initialFocus
-                                      fromDate={new Date()}
-                                      disabled={(date) => {
-                                        const today = new Date()
-                                        today.setHours(0, 0, 0, 0)
-                                        return date < today
-                                      }}
-                                      className="rounded-md border [&_.rdp]:p-2 [&_.rdp-months]:space-y-4 [&_.rdp-table]:w-full [&_.rdp-head_th]:w-10 [&_.rdp-head_th]:p-0 [&_.rdp-head_th]:font-normal [&_.rdp-head_th]:text-sm [&_.rdp-cell]:p-0 [&_.rdp-tbody]:space-y-2 [&_.rdp-day]:h-10 [&_.rdp-day]:w-10 [&_.rdp-day]:p-0 [&_.rdp-day_button]:h-10 [&_.rdp-day_button]:w-10"
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="status"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-medium">Status</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="h-12 text-base shadow-sm transition-shadow focus:shadow-md">
-                                    <SelectValue placeholder="Select status" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="todo">To Do</SelectItem>
-                                  <SelectItem value="in-progress">In Progress</SelectItem>
-                                  <SelectItem value="done">Done</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <DialogFooter>
-                          <Button
-                            type="submit"
-                            disabled={isCreatingTask}
-                            className="w-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl disabled:opacity-50"
-                          >
-                            {isCreatingTask ? (
-                              <div className="flex items-center gap-2">
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                {editingTask ? 'Updating...' : 'Creating...'}
-                              </div>
-                            ) : (
-                              editingTask ? 'Update Task' : 'Create Task'
-                            )}
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
               </div>
 
-              <div className="space-y-4">
-                {activeTasks.length === 0 && completedTasks.length === 0 && (
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-white/50 py-12 text-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100/50 text-blue-600">
-                      <CheckCircle2 className="h-6 w-6" />
-                    </div>
-                    <h3 className="mt-4 text-sm font-medium text-slate-900">No tasks yet</h3>
-                    <p className="mt-2 max-w-sm text-sm text-slate-600">
-                      Create your first task to start tracking progress on this project
-                    </p>
-                  </div>
-                )}
-
-                {activeTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    onClick={() => {
+              <DragOverlay>
+                {activeTask ? (
+                  <TaskCard 
+                    task={activeTask} 
+                    isDragging 
+                    onEdit={(task) => {
+                      setEditingTask(task)
+                      setIsDialogOpen(true)
+                    }}
+                    onTaskClick={(task) => {
                       setSelectedTask(task)
                       setIsDetailsOpen(true)
                     }}
-                    className={cn(
-                      "group relative overflow-visible rounded-xl border bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-100 cursor-pointer",
-                      task.due_date && new Date() > new Date(task.due_date) && task.status !== 'done' && "bg-red-50/50 border-red-100",
-                      task.status === 'done' && !task.due_date && "bg-slate-50/50",
-                      task.status === 'in-progress' && !task.due_date && "bg-blue-50/50"
-                    )}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-50/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                    
-                    {/* Action Buttons */}
-                    <div className="absolute right-4 top-4 z-10 flex items-center gap-2 invisible group-hover:visible">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingTask(task);
-                          setIsDialogOpen(true);
-                        }}
-                        className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-blue-50 hover:shadow-md cursor-pointer"
-                      >
-                        <Pencil className="h-4 w-4 text-blue-600" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm('Are you sure you want to delete this task?')) {
-                            deleteTask(task.id);
-                          }
-                        }}
-                        className="h-8 w-8 rounded-lg bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-red-50 hover:shadow-md cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    </div>
-
-                    <div className="relative flex items-start gap-4">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleTaskStatus(task.id, task.status)
-                        }}
-                        className="mt-1 flex-shrink-0 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 rounded-full"
-                        aria-label={`Mark task as ${task.status === 'done' ? 'incomplete' : 'complete'}`}
-                      >
-                        {task.status === 'done' ? (
-                          <CheckCircle2 className="h-5 w-5 text-blue-600" />
-                        ) : task.status === 'in-progress' ? (
-                          <Circle className="h-5 w-5 text-blue-500" />
-                        ) : (
-                          <Circle className="h-5 w-5 text-slate-400 hover:text-blue-500" />
-                        )}
-                      </button>
-                      <div className="flex-grow min-w-0">
-                        <h3 className={cn(
-                          "text-base font-medium text-slate-900 truncate transition-colors",
-                          task.status === 'done' && "line-through text-slate-500"
-                        )}>
-                          {task.title}
-                        </h3>
-                        {task.description && (
-                          <p className={cn(
-                            "mt-1 text-sm text-slate-600 line-clamp-2 transition-colors",
-                            task.status === 'done' && "line-through text-slate-400"
-                          )}>
-                            {task.description}
-                          </p>
-                        )}
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {task.due_date && (
-                            <div className="flex items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-600 shadow-sm backdrop-blur-sm ring-1 ring-slate-200/50">
-                              <CalendarDays className="h-3.5 w-3.5" />
-                              Due {format(new Date(task.due_date), 'MMM d, yyyy')}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-600 shadow-sm backdrop-blur-sm ring-1 ring-slate-200/50">
-                            <Clock className="h-3.5 w-3.5" />
-                            {format(new Date(task.created_at), 'MMM d, yyyy')}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className={cn(
-                              "px-2 py-1 text-xs rounded-md shadow-sm backdrop-blur-sm",
-                              task.status === 'done' && "bg-blue-100 text-blue-700 ring-1 ring-blue-200/50",
-                              task.status === 'in-progress' && "bg-blue-100 text-blue-700 ring-1 ring-blue-200/50",
-                              task.status === 'todo' && "bg-slate-100 text-slate-700 ring-1 ring-slate-200/50"
-                            )}>
-                              {task.status === 'in-progress' ? 'In Progress' : 
-                               task.status === 'done' ? 'Completed' : 'To Do'}
-                            </Badge>
-                            {task.due_date && new Date() > new Date(task.due_date) && task.status !== 'done' && (
-                              <Badge variant="secondary" className="px-2 py-1 text-xs rounded-md shadow-sm backdrop-blur-sm bg-red-100 text-red-700 ring-1 ring-red-200/50">
-                                Overdue
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                  />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
         </main>
       </SidebarInset>

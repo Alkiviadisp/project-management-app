@@ -542,7 +542,7 @@ function TaskList() {
         </header>
 
         <main className="flex flex-col items-center justify-start">
-          <div className="w-full space-y-6">
+          <div className="w-full">
             <DndContext
               sensors={sensors}
               onDragEnd={handleDragEnd}
@@ -551,7 +551,7 @@ function TaskList() {
             >
               {/* Statistics Cards and Done Drop Zone - Sticky */}
               <div className="sticky top-0 z-30">
-                <div className="bg-white backdrop-blur-sm py-6 px-4 md:px-6 border-b">
+                <div className="bg-white backdrop-blur-sm py-4 px-4 md:px-6 border-b">
                   {/* Statistics Cards */}
                   <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                     <button 
@@ -659,7 +659,7 @@ function TaskList() {
               </div>
 
               {/* Completed Tasks Section */}
-              <div className="px-4 md:px-6 space-y-6">
+              <div className="px-4 md:px-6">
                 {doneCount > 0 && (
                   <div className="rounded-lg border bg-white shadow-sm">
                     <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
@@ -759,7 +759,7 @@ function TaskList() {
 
                 {/* Main Task Columns */}
                 {!isLoading && filteredTasks.length > 0 && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
                     {/* To Do Column */}
                     <DroppableColumn id="todo" title="To Do">
                       {filteredTasks
@@ -1213,19 +1213,21 @@ function DroppableColumn({ id, title, children, className }: {
   const isMainColumn = id === 'todo' || id === 'in-progress'
 
   return (
-    <div className="h-full">
+    <div className="h-full w-full">
       {title && <h2 className="text-lg font-semibold mb-4">{title}</h2>}
       <div 
         ref={setNodeRef} 
         className={cn(
-          "space-y-4",
-          isMainColumn && "p-4 rounded-lg border-2 border-dashed transition-colors min-h-[120px] h-fit",
+          "relative",
+          isMainColumn && "p-6 rounded-lg border-2 border-dashed transition-colors min-h-[400px] h-fit w-full",
           isMainColumn && id === "todo" && "bg-gray-50/50 border-gray-200",
           isMainColumn && id === "in-progress" && "bg-green-50/50 border-green-200",
           className
         )}
       >
-        {children}
+        <div className="space-y-4 pb-20">
+          {children}
+        </div>
       </div>
     </div>
   )
