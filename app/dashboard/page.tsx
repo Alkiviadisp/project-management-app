@@ -618,7 +618,7 @@ export default function DashboardPage() {
                       {project.status === 'in-progress' ? 'In Progress' : 
                        project.status === 'done' ? 'Completed' : 'To Do'}
                     </Badge>
-                    <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs min-w-[60px] text-center", 
+                    <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs min-w-[60px] text-center flex items-center justify-center", 
                       project.priority === 'low' && "bg-green-100 text-green-700",
                       project.priority === 'medium' && "bg-yellow-100 text-yellow-700",
                       project.priority === 'high' && "bg-red-100 text-red-700"
