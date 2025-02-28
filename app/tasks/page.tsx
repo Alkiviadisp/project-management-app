@@ -519,7 +519,7 @@ function TaskList() {
     <SidebarProvider>
       <AppSidebar className="hidden lg:block" />
       <SidebarInset className="bg-gradient-to-br from-white to-blue-50/20">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white/95 px-4 md:px-6 backdrop-blur supports-[backdrop-filter]:bg-white/60">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-4 h-6" />
@@ -529,10 +529,10 @@ function TaskList() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="relative w-64">
+            <div className="relative w-48 md:w-64">
               <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search Tasks by Project Title..."
+                placeholder="Search Tasks..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-8"
@@ -541,8 +541,8 @@ function TaskList() {
           </div>
         </header>
 
-        <main className="flex flex-col items-center justify-start py-10 px-4">
-          <div className="w-full max-w-7xl space-y-6">
+        <main className="flex flex-col items-center justify-start">
+          <div className="w-full space-y-6">
             <DndContext
               sensors={sensors}
               onDragEnd={handleDragEnd}
@@ -551,9 +551,9 @@ function TaskList() {
             >
               {/* Statistics Cards and Done Drop Zone - Sticky */}
               <div className="sticky top-0 z-30">
-                <div className="bg-white backdrop-blur-sm pt-4 pb-6 space-y-6">
+                <div className="bg-white backdrop-blur-sm py-6 px-4 md:px-6 border-b">
                   {/* Statistics Cards */}
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                     <button 
                       onClick={() => handleCardClick("todo")}
                       className="transition-transform hover:scale-105 focus:outline-none"
@@ -648,7 +648,7 @@ function TaskList() {
                   <DroppableColumn 
                     id="done" 
                     title=""
-                    className="h-16 border-2 border-dashed border-red-200 bg-red-50/50 rounded-lg flex items-center justify-center"
+                    className="mt-4 h-16 border-2 border-dashed border-red-200 bg-red-50/50 rounded-lg flex items-center justify-center"
                   >
                     <div className="flex items-center gap-2 text-red-500">
                       <CheckCircle2 className="h-5 w-5" />
@@ -659,147 +659,149 @@ function TaskList() {
               </div>
 
               {/* Completed Tasks Section */}
-              {doneCount > 0 && (
-                <div className="rounded-lg border bg-white shadow-sm">
-                  <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-red-600" />
-                        <span>Completed Tasks</span>
-                        <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
-                          {doneCount}
-                        </Badge>
-                      </div>
-                      <ChevronDown className="h-4 w-4 text-gray-500" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="divide-y border-t">
-                        {tasks
-                          .filter(task => task.status === 'done')
-                          .map((task) => (
-                            <div
-                              key={task.id}
-                              className="group flex items-center gap-3 bg-red-50/50 px-4 py-3"
-                            >
-                              <button
-                                onClick={() => toggleTaskStatus(task.id, task.status)}
-                                className="flex-shrink-0 transition-transform hover:scale-110"
+              <div className="px-4 md:px-6 space-y-6">
+                {doneCount > 0 && (
+                  <div className="rounded-lg border bg-white shadow-sm">
+                    <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
+                      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-red-600" />
+                          <span>Completed Tasks</span>
+                          <Badge variant="secondary" className="ml-2 bg-red-100 text-red-600">
+                            {doneCount}
+                          </Badge>
+                        </div>
+                        <ChevronDown className="h-4 w-4 text-gray-500" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="divide-y border-t">
+                          {tasks
+                            .filter(task => task.status === 'done')
+                            .map((task) => (
+                              <div
+                                key={task.id}
+                                className="group flex items-center gap-3 bg-red-50/50 px-4 py-3"
                               >
-                                <CheckCircle2 className="h-4 w-4 text-red-600" />
-                              </button>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium text-gray-900">{task.title}</p>
-                                <div className="flex items-center gap-3 text-xs text-gray-500">
-                                  <Link
-                                    href={`/projects/${task.project_id}`}
-                                    className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                                <button
+                                  onClick={() => toggleTaskStatus(task.id, task.status)}
+                                  className="flex-shrink-0 transition-transform hover:scale-110"
+                                >
+                                  <CheckCircle2 className="h-4 w-4 text-red-600" />
+                                </button>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-gray-900">{task.title}</p>
+                                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                                    <Link
+                                      href={`/projects/${task.project_id}`}
+                                      className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                                    >
+                                      <FolderKanban className="h-3 w-3" />
+                                      {task.project.title}
+                                    </Link>
+                                    {task.due_date && (
+                                      <span className="flex items-center gap-1">
+                                        <CalendarDays className="h-3 w-3" />
+                                        Due {format(new Date(task.due_date), 'MMM d')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const { data: { user } } = await supabase.auth.getUser()
+                                        if (!user) throw new Error("User not found")
+
+                                        const { error: updateError } = await supabase
+                                          .rpc('update_task_status', {
+                                            p_task_id: task.id,
+                                            p_user_id: user.id,
+                                            p_status: 'in-progress'
+                                          })
+
+                                        if (updateError) throw updateError
+
+                                        setTasks(prev => prev.map(t => 
+                                          t.id === task.id ? { ...t, status: 'in-progress' } : t
+                                        ))
+
+                                        toast.success("Task moved back to in progress")
+                                      } catch (error) {
+                                        console.error('Error updating task:', error)
+                                        toast.error("Failed to update task status")
+                                      }
+                                    }}
+                                    className="flex-shrink-0 transition-transform hover:scale-110"
+                                    title="Return to In Progress"
                                   >
-                                    <FolderKanban className="h-3 w-3" />
-                                    {task.project.title}
-                                  </Link>
-                                  {task.due_date && (
-                                    <span className="flex items-center gap-1">
-                                      <CalendarDays className="h-3 w-3" />
-                                      Due {format(new Date(task.due_date), 'MMM d')}
-                                    </span>
-                                  )}
+                                    <RotateCcw className="h-4 w-4 text-green-600 hover:text-green-700" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (window.confirm('Are you sure you want to delete this task?')) {
+                                        deleteTask(task.id)
+                                      }
+                                    }}
+                                    className="flex-shrink-0"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600 hover:text-red-700" />
+                                  </button>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      const { data: { user } } = await supabase.auth.getUser()
-                                      if (!user) throw new Error("User not found")
+                            ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                )}
 
-                                      const { error: updateError } = await supabase
-                                        .rpc('update_task_status', {
-                                          p_task_id: task.id,
-                                          p_user_id: user.id,
-                                          p_status: 'in-progress'
-                                        })
+                {/* Main Task Columns */}
+                {!isLoading && filteredTasks.length > 0 && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* To Do Column */}
+                    <DroppableColumn id="todo" title="To Do">
+                      {filteredTasks
+                        .filter(task => task.status === 'todo')
+                        .map((task) => (
+                          <TaskCard 
+                            key={task.id} 
+                            task={task} 
+                            onEdit={(task) => {
+                              setEditingTask(task)
+                              setIsDialogOpen(true)
+                            }}
+                            onTaskClick={(task) => {
+                              setSelectedTask(task)
+                              setIsDetailsOpen(true)
+                            }}
+                          />
+                        ))}
+                    </DroppableColumn>
 
-                                      if (updateError) throw updateError
-
-                                      setTasks(prev => prev.map(t => 
-                                        t.id === task.id ? { ...t, status: 'in-progress' } : t
-                                      ))
-
-                                      toast.success("Task moved back to in progress")
-                                    } catch (error) {
-                                      console.error('Error updating task:', error)
-                                      toast.error("Failed to update task status")
-                                    }
-                                  }}
-                                  className="flex-shrink-0 transition-transform hover:scale-110"
-                                  title="Return to In Progress"
-                                >
-                                  <RotateCcw className="h-4 w-4 text-green-600 hover:text-green-700" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (window.confirm('Are you sure you want to delete this task?')) {
-                                      deleteTask(task.id)
-                                    }
-                                  }}
-                                  className="flex-shrink-0"
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600 hover:text-red-700" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
-              )}
-
-              {/* Main Task Columns */}
-              {!isLoading && filteredTasks.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* To Do Column */}
-                  <DroppableColumn id="todo" title="To Do">
-                    {filteredTasks
-                      .filter(task => task.status === 'todo')
-                      .map((task) => (
-                        <TaskCard 
-                          key={task.id} 
-                          task={task} 
-                          onEdit={(task) => {
-                            setEditingTask(task)
-                            setIsDialogOpen(true)
-                          }}
-                          onTaskClick={(task) => {
-                            setSelectedTask(task)
-                            setIsDetailsOpen(true)
-                          }}
-                        />
-                      ))}
-                  </DroppableColumn>
-
-                  {/* In Progress Column */}
-                  <DroppableColumn id="in-progress" title="In Progress">
-                    {filteredTasks
-                      .filter(task => task.status === 'in-progress')
-                      .map((task) => (
-                        <TaskCard 
-                          key={task.id} 
-                          task={task} 
-                          onEdit={(task) => {
-                            setEditingTask(task)
-                            setIsDialogOpen(true)
-                          }}
-                          onTaskClick={(task) => {
-                            setSelectedTask(task)
-                            setIsDetailsOpen(true)
-                          }}
-                        />
-                      ))}
-                  </DroppableColumn>
-                </div>
-              )}
+                    {/* In Progress Column */}
+                    <DroppableColumn id="in-progress" title="In Progress">
+                      {filteredTasks
+                        .filter(task => task.status === 'in-progress')
+                        .map((task) => (
+                          <TaskCard 
+                            key={task.id} 
+                            task={task} 
+                            onEdit={(task) => {
+                              setEditingTask(task)
+                              setIsDialogOpen(true)
+                            }}
+                            onTaskClick={(task) => {
+                              setSelectedTask(task)
+                              setIsDetailsOpen(true)
+                            }}
+                          />
+                        ))}
+                    </DroppableColumn>
+                  </div>
+                )}
+              </div>
 
               <DragOverlay>
                 {activeTask ? (
@@ -1211,13 +1213,13 @@ function DroppableColumn({ id, title, children, className }: {
   const isMainColumn = id === 'todo' || id === 'in-progress'
 
   return (
-    <div className="space-y-4">
-      {title && <h2 className="text-lg font-semibold">{title}</h2>}
+    <div className="h-full">
+      {title && <h2 className="text-lg font-semibold mb-4">{title}</h2>}
       <div 
         ref={setNodeRef} 
         className={cn(
           "space-y-4",
-          isMainColumn && "p-4 rounded-lg border-2 border-dashed transition-colors min-h-[120px] h-fit pb-24",
+          isMainColumn && "p-4 rounded-lg border-2 border-dashed transition-colors min-h-[120px] h-fit",
           isMainColumn && id === "todo" && "bg-gray-50/50 border-gray-200",
           isMainColumn && id === "in-progress" && "bg-green-50/50 border-green-200",
           className
