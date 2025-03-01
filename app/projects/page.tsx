@@ -154,10 +154,13 @@ function DraggableProjectCard({
       >
         <div className="relative">
           {/* Colored top section */}
-          <div className={cn("h-[66px] flex items-center px-4 md:px-6", project.color)}>
+          <div className={cn("h-auto py-4 flex flex-col px-4 md:px-6", project.color)}>
             <h3 className="line-clamp-1 text-lg md:text-xl font-semibold text-white">
               {project.title}
             </h3>
+            <p className="line-clamp-2 text-sm text-white/80 mt-1">
+              {project.description}
+            </p>
           </div>
 
           {/* Action buttons */}
@@ -191,13 +194,7 @@ function DraggableProjectCard({
           </div>
 
           {/* Content section */}
-          <div className="p-4 md:p-6 pt-6">
-            <div className="mb-4">
-              <p className="line-clamp-2 text-sm text-gray-500">
-                {project.description}
-              </p>
-            </div>
-
+          <div className="p-4 md:p-2 pt-6">
             {/* Status and Priority */}
             <div className="mb-4 flex flex-wrap gap-2">
               <Badge variant="secondary" className={cn("px-2 py-0.5 text-xs", getStatusColor(project.status))}>
@@ -228,14 +225,25 @@ function DraggableProjectCard({
             </div>
 
             {/* Due Date */}
-            <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
-              <CalendarDays className="h-3 w-3" />
-              <span className={cn(
-                new Date() > new Date(project.due_date) && project.status !== 'done' && "text-red-600 font-medium"
-              )}>
-                Due {format(new Date(project.due_date), 'MMM d, yyyy')}
-                {new Date() > new Date(project.due_date) && project.status !== 'done' && " (Overdue)"}
-              </span>
+            <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-3 w-3" />
+                <span className={cn(
+                  new Date() > new Date(project.due_date) && project.status !== 'done' && "text-red-600 font-medium"
+                )}>
+                  Due {format(new Date(project.due_date), 'MMM d, yyyy')}
+                  {new Date() > new Date(project.due_date) && project.status !== 'done' && " (Overdue)"}
+                </span>
+              </div>
+              {project.attachments.length > 0 && (
+                <>
+                  <span className="text-gray-300">•</span>
+                  <div className="flex items-center gap-1.5">
+                    <Paperclip className="h-3 w-3" />
+                    <span>{project.attachments.length} attachment{project.attachments.length > 1 ? 's' : ''}</span>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Tags */}
@@ -253,14 +261,6 @@ function DraggableProjectCard({
                     </Badge>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Attachments */}
-            {project.attachments.length > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <Paperclip className="h-3 w-3" />
-                <span>{project.attachments.length} attachment{project.attachments.length > 1 ? 's' : ''}</span>
               </div>
             )}
           </div>
@@ -636,7 +636,7 @@ function ProjectList() {
                 <DroppableColumn 
                   id="done" 
                   title=""
-                  className="mt-4 h-24 border-2 border-dashed border-red-200 bg-red-50/50 rounded-lg flex items-center justify-center"
+                  className="mt-4 h-20 border-2 border-dashed border-red-200 bg-red-50/50 rounded-lg flex items-center justify-center"
                 >
                   <div className="flex items-center gap-2 text-red-500">
                     <CheckCircle2 className="h-5 w-5" />
@@ -646,7 +646,7 @@ function ProjectList() {
               </div>
 
               {/* Projects Section */}
-              <div className="px-4 md:px-6 space-y-6">
+              <div className="px-4 md:px-6 space-y-6 pb-5">
                 {/* Completed Projects Section */}
                 <div className="rounded-lg border bg-white shadow-sm">
                   <Collapsible open={isCompletedOpen} onOpenChange={setIsCompletedOpen}>
@@ -811,7 +811,7 @@ function ProjectList() {
                 </div>
 
                 {isLoading ? (
-                  <div className="grid auto-rows-[240px] grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-fr">
+                  <div className="grid auto-rows-[240px] grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 auto-rows-fr">
                     {[...Array(6)].map((_, i) => (
                       <div
                         key={i}
@@ -839,7 +839,7 @@ function ProjectList() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="grid auto-rows-[240px] grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-fr">
+                  <div className="grid auto-rows-[240px] grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 auto-rows-fr mb-5">
                     {filteredProjects
                       .filter(project => project.status !== 'done')
                       .map((project) => (

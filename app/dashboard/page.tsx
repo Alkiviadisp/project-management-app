@@ -565,9 +565,9 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between border-b px-4 py-3">
               <div className="flex items-center gap-2">
                 <FolderKanban className="h-4 w-4 text-muted-foreground" />
-                <h2 className="font-medium">All Projects</h2>
+                <h2 className="font-medium">Active Projects</h2>
                 <Badge variant="secondary" className="ml-2">
-                  {projects.length}
+                  {projects.filter(project => project.status === 'todo' || project.status === 'in-progress').length}
                 </Badge>
               </div>
               <Button variant="ghost" size="sm" asChild className="gap-1 text-xs">
@@ -578,7 +578,10 @@ export default function DashboardPage() {
               </Button>
             </div>
             <div className="divide-y">
-              {projects.slice(0, 5).map(project => (
+              {projects
+                .filter(project => project.status === 'todo' || project.status === 'in-progress')
+                .slice(0, 5)
+                .map(project => (
                 <Link 
                   key={project.id} 
                   href={`/projects/${project.id}`}
