@@ -206,7 +206,7 @@ export default function DashboardPage() {
   const fetchWeatherByCity = React.useCallback(async (city?: string) => {
     try {
       const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY
-      const cityToUse = city || process.env.NEXT_PUBLIC_DEFAULT_CITY || "London"
+      const cityToUse = city || localStorage.getItem('lastUsedCity') || process.env.NEXT_PUBLIC_DEFAULT_CITY || "London"
       const response = await fetch(
         `https://api.openweathermap.org/data/2.5/weather?q=${cityToUse}&appid=${apiKey}&units=metric`
       )
@@ -225,6 +225,10 @@ export default function DashboardPage() {
         description: data.weather[0].description,
         condition: data.weather[0].main,
       })
+      // Store the successfully fetched city
+      if (city) {
+        localStorage.setItem('lastUsedCity', data.name)
+      }
       setIsPopoverOpen(false)
       toast.success("Weather updated successfully")
     } catch (error) {
@@ -238,6 +242,8 @@ export default function DashboardPage() {
         (position) => {
           const { latitude, longitude } = position.coords
           fetchWeatherByCoords(latitude, longitude)
+          // Remove stored city when using geolocation
+          localStorage.removeItem('lastUsedCity')
           toast.success("Location updated successfully")
         },
         (error) => {
@@ -264,35 +270,57 @@ export default function DashboardPage() {
 
   // Add useEffect for initial weather fetch
   React.useEffect(() => {
-    // Try to get user's location
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords
-          fetchWeatherByCoords(latitude, longitude)
-        },
-        (error) => {
-          console.error('Geolocation error:', error)
-          fetchWeatherByCity()
-        }
-      )
+    // Check if we have a stored city
+    const storedCity = localStorage.getItem('lastUsedCity')
+    
+    if (storedCity) {
+      // If we have a stored city, use it
+      fetchWeatherByCity(storedCity)
     } else {
-      fetchWeatherByCity()
-    }
-
-    // Refresh weather every 30 minutes
-    const weatherInterval = setInterval(() => {
+      // If no stored city, try geolocation
       if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
-          (position) => fetchWeatherByCoords(position.coords.latitude, position.coords.longitude),
-          () => fetchWeatherByCity()
+          (position) => {
+            const { latitude, longitude } = position.coords
+            fetchWeatherByCoords(latitude, longitude)
+          },
+          (error) => {
+            console.error('Geolocation error:', error)
+            fetchWeatherByCity()
+          }
         )
       } else {
         fetchWeatherByCity()
       }
-    }, 30 * 60 * 1000) // 30 minutes
+    }
 
-    return () => clearInterval(weatherInterval)
+    // Check when we last fetched weather data
+    const lastFetch = localStorage.getItem('lastWeatherFetch')
+    const currentTime = Date.now()
+    const oneHour = 60 * 60 * 1000 // 1 hour in milliseconds
+
+    // Only set up the interval if it's been more than an hour since last fetch
+    if (!lastFetch || currentTime - parseInt(lastFetch) > oneHour) {
+      localStorage.setItem('lastWeatherFetch', currentTime.toString())
+      
+      // Update weather every hour
+      const weatherInterval = setInterval(() => {
+        const storedCity = localStorage.getItem('lastUsedCity')
+        if (storedCity) {
+          fetchWeatherByCity(storedCity)
+        } else if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => fetchWeatherByCoords(position.coords.latitude, position.coords.longitude),
+            () => fetchWeatherByCity()
+          )
+        } else {
+          fetchWeatherByCity()
+        }
+        localStorage.setItem('lastWeatherFetch', Date.now().toString())
+      }, oneHour)
+
+      return () => clearInterval(weatherInterval)
+    }
   }, [fetchWeatherByCoords, fetchWeatherByCity])
 
   React.useEffect(() => {
