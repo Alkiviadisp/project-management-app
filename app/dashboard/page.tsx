@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { LayoutDashboard, Clock, ArrowRight, CheckCircle2, FolderKanban, Search, Users, CalendarCheck, ListTodo, TrendingUp, TrendingDown, CalendarDays, Edit2, Trash2 } from "lucide-react"
+import { LayoutDashboard, ArrowRight, FolderKanban, CalendarCheck, ListTodo, CalendarDays, Edit2, Trash2, Cloud, CloudRain, Sun, CloudSun, CloudFog, CloudLightning, CloudSnow, Cloudy, Settings, Locate } from "lucide-react"
 import {
   SidebarInset,
   SidebarProvider,
@@ -28,6 +28,11 @@ import {
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
 import { useRouter } from "next/navigation"
 import { toast } from "react-hot-toast"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 // Project colors for progress bars
 const projectColors = [
@@ -71,6 +76,16 @@ type Project = {
   created_at: string
 }
 
+type StatItem = {
+  name: string
+  value: string
+  icon?: React.ReactNode
+  href?: string
+  description?: string
+  customContent?: React.ReactNode
+  headerContent?: React.ReactNode
+}
+
 // Remove the static stats array and add these functions
 const calculateStats = (projects: Project[]) => {
   const today = new Date()
@@ -94,15 +109,15 @@ const calculateStats = (projects: Project[]) => {
       href: "/tasks?filter=due-today"
     },
     {
-      name: "Team Members",
-      value: "5",
-      icon: <Users className="h-4 w-4 text-muted-foreground" />
-    },
-    {
       name: "Completed Projects",
       value: completedProjects.toString(),
       icon: <ListTodo className="h-4 w-4 text-muted-foreground" />,
       href: "/projects?filter=completed"
+    },
+    {
+      name: "Weather",
+      value: "Loading...", // This will be updated once we add the API key
+      icon: <Cloud className="h-4 w-4 text-muted-foreground" />
     },
   ]
 }
@@ -135,8 +150,209 @@ export default function DashboardPage() {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [userNickname, setUserNickname] = React.useState("")
+  const [weather, setWeather] = React.useState({
+    city: "Loading location...",
+    temperature: 0,
+    description: "",
+    condition: "cloudy",
+  })
   const supabase = createClient()
   const router = useRouter()
+  const [customCity, setCustomCity] = React.useState("")
+  const [isPopoverOpen, setIsPopoverOpen] = React.useState(false)
+  
+  const getWeatherIcon = (condition: string, description: string) => {
+    const lowerCondition = condition.toLowerCase()
+    const lowerDescription = description.toLowerCase()
+
+    if (lowerCondition.includes("thunderstorm")) {
+      return <CloudLightning className="h-5 w-5 text-yellow-400" />
+    } else if (lowerCondition.includes("drizzle") || lowerCondition.includes("rain")) {
+      return <CloudRain className="h-5 w-5 text-blue-400" />
+    } else if (lowerCondition.includes("snow")) {
+      return <Cloud className="h-5 w-5 text-blue-200" />
+    } else if (["mist", "fog", "haze"].some(condition => lowerDescription.includes(condition))) {
+      return <Cloud className="h-5 w-5 text-gray-400" />
+    } else if (lowerCondition.includes("clear")) {
+      return <Sun className="h-5 w-5 text-yellow-400" />
+    } else if (lowerDescription.includes("scattered clouds") || lowerDescription.includes("few clouds")) {
+      return <CloudSun className="h-5 w-5 text-gray-400" />
+    } else if (lowerDescription.includes("broken clouds") || lowerDescription.includes("overcast")) {
+      return <Cloud className="h-5 w-5 text-gray-400" />
+    }
+    return <Cloud className="h-5 w-5 text-muted-foreground" />
+  }
+
+  const fetchWeatherByCoords = React.useCallback(async (lat: number, lon: number) => {
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
+      )
+      if (!response.ok) throw new Error('Weather data fetch failed')
+      const data = await response.json()
+      setWeather({
+        city: data.name,
+        temperature: Math.round(data.main.temp),
+        description: data.weather[0].description,
+        condition: data.weather[0].main,
+      })
+    } catch (error) {
+      console.error('Error fetching weather:', error)
+      toast.error("Failed to fetch weather data")
+    }
+  }, [])
+
+  const fetchWeatherByCity = React.useCallback(async (city?: string) => {
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY
+      const cityToUse = city || process.env.NEXT_PUBLIC_DEFAULT_CITY || "London"
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?q=${cityToUse}&appid=${apiKey}&units=metric`
+      )
+      if (response.status === 404) {
+        toast.error(`City "${cityToUse}" not found. Please try another city name.`)
+        return
+      }
+      if (!response.ok) {
+        toast.error("Failed to fetch weather data. Please try again later.")
+        return
+      }
+      const data = await response.json()
+      setWeather({
+        city: data.name,
+        temperature: Math.round(data.main.temp),
+        description: data.weather[0].description,
+        condition: data.weather[0].main,
+      })
+      setIsPopoverOpen(false)
+      toast.success("Weather updated successfully")
+    } catch (error) {
+      toast.error("Failed to connect to weather service. Please try again later.")
+    }
+  }, [])
+
+  const handleLocationRefresh = React.useCallback(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords
+          fetchWeatherByCoords(latitude, longitude)
+          toast.success("Location updated successfully")
+        },
+        (error) => {
+          console.error('Geolocation error:', error)
+          toast.error("Couldn't get location. Using default city.")
+          fetchWeatherByCity()
+        }
+      )
+    } else {
+      toast.error("Geolocation is not supported by your browser")
+      fetchWeatherByCity()
+    }
+  }, [fetchWeatherByCoords, fetchWeatherByCity])
+
+  const handleCitySubmit = React.useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customCity.trim()) {
+      toast.error("Please enter a city name")
+      return
+    }
+    await fetchWeatherByCity(customCity.trim())
+    setCustomCity("")
+  }, [customCity, fetchWeatherByCity])
+
+  // Add useEffect for initial weather fetch
+  React.useEffect(() => {
+    // Try to get user's location
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords
+          fetchWeatherByCoords(latitude, longitude)
+        },
+        (error) => {
+          console.error('Geolocation error:', error)
+          fetchWeatherByCity()
+        }
+      )
+    } else {
+      fetchWeatherByCity()
+    }
+
+    // Refresh weather every 30 minutes
+    const weatherInterval = setInterval(() => {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => fetchWeatherByCoords(position.coords.latitude, position.coords.longitude),
+          () => fetchWeatherByCity()
+        )
+      } else {
+        fetchWeatherByCity()
+      }
+    }, 30 * 60 * 1000) // 30 minutes
+
+    return () => clearInterval(weatherInterval)
+  }, [fetchWeatherByCoords, fetchWeatherByCity])
+
+  React.useEffect(() => {
+    async function fetchProjects() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error("User not found")
+
+        // Fetch projects
+        const { data: projectsData, error: projectsError } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false })
+
+        if (projectsError) throw projectsError
+
+        // Fetch tasks for each project
+        const projectsWithTasks = await Promise.all(projectsData.map(async (project) => {
+          const { data: tasksData, error: tasksError } = await supabase
+            .from('tasks')
+            .select('id, title, status, project_id, due_date, created_at')
+            .eq('project_id', project.id)
+
+          if (tasksError) {
+            console.error('Error fetching tasks:', tasksError)
+            return {
+              ...project,
+              tasks: []
+            }
+          }
+
+          return {
+            ...project,
+            tasks: tasksData || []
+          }
+        }))
+
+        setProjects(projectsWithTasks)
+
+        // Fetch user nickname
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('id', user.id)
+          .single()
+
+        if (profileData?.nickname) {
+          setUserNickname(profileData.nickname)
+        }
+      } catch (error) {
+        console.error('Error:', error)
+        toast.error("Failed to load projects")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProjects()
+  }, [supabase])
 
   // Calculate the month-over-month change in completed projects
   const completedProjectsTrend = React.useMemo(() => {
@@ -163,8 +379,8 @@ export default function DashboardPage() {
     }
   }, [projects])
 
-  // Calculate stats based on projects
-  const stats = React.useMemo(() => {
+  // Update stats calculation
+  const stats = React.useMemo<StatItem[]>(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
@@ -202,18 +418,64 @@ export default function DashboardPage() {
         href: "/tasks?filter=due-today"
       },
       {
-        name: "Team Members",
-        value: "5",
-        icon: <Users className="h-4 w-4 text-muted-foreground" />
-      },
-      {
         name: "Completed Projects",
         value: completedProjects.toString(),
         icon: <ListTodo className="h-4 w-4 text-muted-foreground" />,
         href: "/projects?filter=completed"
-      }
+      },
+      {
+        name: "Current Weather",
+        value: "",
+        customContent: (
+          <div className="flex items-center gap-2 text-lg">
+            <span className="font-medium">{weather.city}</span>
+            <span className="font-bold">{weather.temperature}°C</span>
+            <span className="text-sm text-muted-foreground capitalize">
+              {weather.description}
+            </span>
+          </div>
+        ),
+        headerContent: (
+          <>
+            <div className="flex items-center gap-2">
+              <span>Current Weather</span>
+              <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-4 w-4 hover:bg-slate-100 rounded-full">
+                    <Settings className="h-3 w-3 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-60 p-2">
+                  <form onSubmit={handleCitySubmit} className="flex flex-col gap-2">
+                    <div className="text-sm font-medium">Change City</div>
+                    <Input
+                      type="text"
+                      placeholder="Enter city name"
+                      value={customCity}
+                      onChange={(e) => setCustomCity(e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Button type="submit" size="sm" className="w-full">
+                      Update
+                    </Button>
+                  </form>
+                </PopoverContent>
+              </Popover>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-4 w-4 hover:bg-slate-100 rounded-full"
+                onClick={handleLocationRefresh}
+                title="Update location"
+              >
+                <Locate className="h-3 w-3 text-muted-foreground" />
+              </Button>
+            </div>
+          </>
+        )
+      },
     ]
-  }, [projects])
+  }, [projects, weather, customCity, handleCitySubmit, handleLocationRefresh, isPopoverOpen])
 
   // Add this after the stats calculation
   const priorityData = React.useMemo(() => {
@@ -285,65 +547,6 @@ export default function DashboardPage() {
     { status: "inProgress", count: projects.filter(p => p.status === "in-progress").length, fill: "#00C2FF" }, // Blue
     { status: "done", count: projects.filter(p => p.status === "done").length, fill: "#E5E5E5" }, // Pale Grey
   ], [projects])
-
-  React.useEffect(() => {
-    async function fetchProjects() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error("User not found")
-
-        // Fetch projects
-        const { data: projectsData, error: projectsError } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('created_by', user.id)
-          .order('created_at', { ascending: false })
-
-        if (projectsError) throw projectsError
-
-        // Fetch tasks for each project
-        const projectsWithTasks = await Promise.all(projectsData.map(async (project) => {
-          const { data: tasksData, error: tasksError } = await supabase
-            .from('tasks')
-            .select('id, title, status, project_id, due_date, created_at')
-            .eq('project_id', project.id)
-
-          if (tasksError) {
-            console.error('Error fetching tasks:', tasksError)
-            return {
-              ...project,
-              tasks: []
-            }
-          }
-
-          return {
-            ...project,
-            tasks: tasksData || []
-          }
-        }))
-
-        setProjects(projectsWithTasks)
-
-        // Fetch user nickname
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('nickname')
-          .eq('id', user.id)
-          .single()
-
-        if (profileData?.nickname) {
-          setUserNickname(profileData.nickname)
-        }
-      } catch (error) {
-        console.error('Error:', error)
-        toast.error("Failed to load projects")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchProjects()
-  }, [supabase])
 
   // Function to get task count and completion for a project
   const getProjectTaskCount = (project: Project) => {
@@ -424,13 +627,31 @@ export default function DashboardPage() {
                 const cardContent = (
                   <>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">
-                        {stat.name}
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        {stat.headerContent || stat.name}
                       </CardTitle>
-                      {stat.icon}
+                      {!stat.headerContent && stat.icon}
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold">{stat.value}</div>
+                      {stat.customContent ? (
+                        <>
+                          {stat.customContent}
+                          {stat.description && (
+                            <p className="text-xs text-muted-foreground capitalize mt-1">
+                              {stat.description}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-2xl font-bold">{stat.value}</div>
+                          {stat.description && (
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {stat.description}
+                            </p>
+                          )}
+                        </>
+                      )}
                     </CardContent>
                   </>
                 )
@@ -442,7 +663,14 @@ export default function DashboardPage() {
                     </Card>
                   </Link>
                 ) : (
-                  <Card key={index}>
+                  <Card key={index} className={cn(
+                    stat.name === "Current Weather" && "relative"
+                  )}>
+                    {stat.name === "Current Weather" && (
+                      <div className="absolute top-2 right-2 scale-[2] origin-top-right">
+                        {getWeatherIcon(weather.condition, weather.description)}
+                      </div>
+                    )}
                     {cardContent}
                   </Card>
                 )
