@@ -226,7 +226,9 @@ export default function DashboardPage() {
         condition: data.weather[0].main,
       })
       // Store the successfully fetched city
-      localStorage.setItem('lastUsedCity', data.name)
+      if (city) {
+        localStorage.setItem('lastUsedCity', data.name)
+      }
       setIsPopoverOpen(false)
       toast.success("Weather updated successfully")
     } catch (error) {
@@ -240,6 +242,8 @@ export default function DashboardPage() {
         (position) => {
           const { latitude, longitude } = position.coords
           fetchWeatherByCoords(latitude, longitude)
+          // Remove stored city when using geolocation
+          localStorage.removeItem('lastUsedCity')
           toast.success("Location updated successfully")
         },
         (error) => {
