@@ -639,7 +639,7 @@ export default function DashboardPage() {
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mx-4 h-6" />
             <div>
-              <h1 className="text-xl font-semibold">Hello, {userNickname}</h1>
+              <h1 className="text-xl font-semibold">Hello!, {userNickname}</h1>
               <p className="text-sm text-muted-foreground">Here's what's happening with your projects today</p>
             </div>
           </div>
