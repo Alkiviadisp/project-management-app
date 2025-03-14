@@ -20,7 +20,7 @@ jobs:
             echo ${{ secrets.DOCKER_HUB_TOKEN }} | docker login -u ${{secrets.DOCKER_HUB_USERNAME}} --password-stdin
         - name: Build and Publish in docker hub
           run: |
-            docker-compose build
+            docker compose build
             docker-compose push
 
 
