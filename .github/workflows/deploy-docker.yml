@@ -1,4 +1,4 @@
-name: vps-deploy
+/* name: vps-deploy
 
 on:
   push:
@@ -40,4 +40,4 @@ jobs:
             script: |
               cd ${{ secrets.REMOTE_WORK_DIR }}
               docker-compose pull
-              docker-compose up -d
+              docker-compose up -d */
