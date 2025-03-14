@@ -672,7 +672,7 @@ export default function DashboardPage() {
                         </>
                       ) : (
                         <>
-                          <div className="text-2xl font-bold">{stat.value}</div>
+                      <div className="text-2xl font-bold">{stat.value}</div>
                           {stat.description && (
                             <p className="text-xs text-muted-foreground capitalize">
                               {stat.description}
