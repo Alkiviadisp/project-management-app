@@ -455,10 +455,10 @@ export default function DashboardPage() {
         name: "Current Weather",
         value: "",
         customContent: (
-          <div className="flex items-center gap-2 text-lg">
-            <span className="font-medium">{weather.city}</span>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-base sm:text-lg">
+            <span className="font-medium truncate max-w-[120px] sm:max-w-none">{weather.city}</span>
             <span className="font-bold">{weather.temperature}°C</span>
-            <span className="text-sm text-muted-foreground capitalize">
+            <span className="text-sm text-muted-foreground capitalize truncate max-w-[150px]">
               {weather.description}
             </span>
           </div>
@@ -645,10 +645,10 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col gap-6 p-6">
+        <div className="flex flex-1 flex-col gap-4 sm:gap-6 p-4 sm:p-6">
           {/* Statistics Section */}
-          <div className="sticky top-0 z-30 bg-white backdrop-blur-sm pt-4 pb-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="sticky top-0 z-30 bg-white backdrop-blur-sm pt-4 pb-6 -mx-4 sm:mx-0 px-4 sm:px-0">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
               {stats.map((stat, index) => {
                 const isClickable = Boolean(stat.href)
                 
@@ -707,16 +707,16 @@ export default function DashboardPage() {
           </div>
 
           {/* Charts Section */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="w-full overflow-hidden">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Project Progress</CardTitle>
                 <CardDescription className="text-xs">Last 7 days</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0 sm:p-6">
                 <ChartContainer 
                   config={chartConfig}
-                  className="mx-auto h-[120px]"
+                  className="w-full h-[120px] min-w-0"
                 >
                   <BarChart data={projectProgressData}>
                     <CartesianGrid vertical={false} />
@@ -841,15 +841,15 @@ export default function DashboardPage() {
                 <Link 
                   key={project.id} 
                   href={`/projects/${project.id}`}
-                  className="group relative flex items-center gap-6 px-4 py-4 hover:bg-slate-50 transition-colors"
+                  className="group relative flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6 px-4 py-4 hover:bg-slate-50 transition-colors"
                 >
-                  <div className="w-[200px] shrink-0">
+                  <div className="w-full sm:w-[200px] shrink-0">
                     <h3 className="font-bold text-sm truncate">{project.title}</h3>
                     <span className="text-xs text-muted-foreground">
                       {project.tasks?.length || 0} tasks
                     </span>
                   </div>
-                  <div className="flex-1 flex items-center justify-center gap-2 min-w-[300px]">
+                  <div className="flex-1 flex items-center justify-start sm:justify-center gap-2 w-full">
                     <div className="flex items-center gap-2 w-full max-w-[400px]">
                       <Progress 
                         value={(() => {
@@ -867,9 +867,9 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-6 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-6 mt-2 sm:mt-0">
                     <Badge variant="secondary" className={cn(
-                      "px-1.5 py-0 text-xs min-w-[80px] text-center",
+                      "px-1.5 py-0 text-xs min-w-[70px] sm:min-w-[80px] text-center",
                       project.status === 'todo' && "bg-slate-100 text-slate-700",
                       project.status === 'in-progress' && "bg-blue-100 text-blue-700",
                       project.status === 'done' && "bg-green-100 text-green-700"
@@ -877,7 +877,7 @@ export default function DashboardPage() {
                       {project.status === 'in-progress' ? 'In Progress' : 
                        project.status === 'done' ? 'Completed' : 'To Do'}
                     </Badge>
-                    <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs min-w-[60px] text-center flex items-center justify-center", 
+                    <Badge variant="secondary" className={cn("px-1.5 py-0 text-xs min-w-[50px] sm:min-w-[60px] text-center flex items-center justify-center", 
                       project.priority === 'low' && "bg-green-100 text-green-700",
                       project.priority === 'medium' && "bg-yellow-100 text-yellow-700",
                       project.priority === 'high' && "bg-red-100 text-red-700"
@@ -885,18 +885,18 @@ export default function DashboardPage() {
                       {project.priority}
                     </Badge>
                     <span className={cn(
-                      "text-xs text-muted-foreground flex items-center gap-1 min-w-[120px]",
+                      "flex text-xs text-muted-foreground items-center gap-1",
                       new Date() > new Date(project.due_date) && project.status !== 'done' && "text-red-600 font-medium"
                     )}>
                       <CalendarDays className="h-3 w-3" />
                       Due {format(new Date(project.due_date), 'MMM d')}
                       {new Date() > new Date(project.due_date) && project.status !== 'done' && " (Overdue)"}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 sm:gap-2 ml-auto sm:ml-0">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-50"
+                        className="h-7 w-7 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-50"
                         onClick={(e) => {
                           e.preventDefault()
                           router.push(`/projects/new?edit=${project.id}`)
@@ -907,7 +907,7 @@ export default function DashboardPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                        className="h-7 w-7 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
                         onClick={async (e) => {
                           e.preventDefault()
                           if (window.confirm('Are you sure you want to delete this project?')) {
@@ -935,7 +935,7 @@ export default function DashboardPage() {
                         <Trash2 className="h-3.5 w-3.5 text-red-600" />
                       </Button>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <ArrowRight className="h-4 w-4 text-muted-foreground hidden sm:block" />
                   </div>
                 </Link>
               ))}
