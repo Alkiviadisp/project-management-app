@@ -21,7 +21,7 @@ jobs:
         - name: Build and Publish in docker hub
           run: |
             docker compose build
-            docker-compose push
+            docker compose push
 
 
     deploy:

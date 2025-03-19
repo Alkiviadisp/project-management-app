@@ -92,6 +92,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { getCurrentUser, clearUserCache } from '@/lib/utils/auth-cache'
 
 type ProjectStatus = 'todo' | 'in-progress' | 'done'
 
@@ -183,7 +184,7 @@ function TaskList() {
   React.useEffect(() => {
     async function fetchTasks() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
+        const user = await getCurrentUser()
         if (!user) throw new Error("User not found")
 
         const { data, error } = await supabase
@@ -313,7 +314,7 @@ function TaskList() {
 
   const toggleTaskStatus = async (taskId: string, currentStatus: ProjectStatus) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await getCurrentUser()
       if (!user) throw new Error("User not found")
 
       // Cycle through statuses: todo -> in-progress -> done -> todo
@@ -349,7 +350,7 @@ function TaskList() {
       const statusDisplay = newStatus === 'in-progress' ? 'in progress' : newStatus
       toast.success(`Task marked as ${statusDisplay}`)
     } catch (error) {
-      console.error('Error updating task:', error)
+      console.error('Error updating task status:', error)
       toast.error("Failed to update task status")
     }
   }
@@ -401,7 +402,7 @@ function TaskList() {
 
     try {
       setIsCreatingTask(true);
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await getCurrentUser()
       if (!user) throw new Error("User not found")
 
       // Format the date in local timezone to prevent UTC conversion issues
@@ -479,7 +480,7 @@ function TaskList() {
     if (!task || task.status === newStatus) return
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await getCurrentUser()
       if (!user) throw new Error("User not found")
 
       // Update task using raw SQL to ensure proper enum handling
@@ -513,6 +514,13 @@ function TaskList() {
 
   const formatDate = (date: string) => {
     return format(new Date(date), 'MMM d, yyyy')
+  }
+
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (!error) {
+      clearUserCache() // Clear the cache on sign out
+    }
   }
 
   return (
@@ -710,7 +718,7 @@ function TaskList() {
                                   <button
                                     onClick={async () => {
                                       try {
-                                        const { data: { user } } = await supabase.auth.getUser()
+                                        const user = await getCurrentUser()
                                         if (!user) throw new Error("User not found")
 
                                         const { error: updateError } = await supabase
